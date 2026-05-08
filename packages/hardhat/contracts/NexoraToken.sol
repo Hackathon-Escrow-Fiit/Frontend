@@ -15,7 +15,7 @@ contract DecentraToken is ERC20, ERC20Burnable, ERC20Capped, ERC20Pausable, Acce
         address defaultAdmin,
         address minter,
         uint256 cap_
-    ) ERC20("DecentraWork Token", "DWT") ERC20Capped(cap_) {
+    ) ERC20("Nexora Token", "NXR") ERC20Capped(cap_) {
         _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
         _grantRole(MINTER_ROLE, minter);
         _grantRole(PAUSER_ROLE, defaultAdmin);
