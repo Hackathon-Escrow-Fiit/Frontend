@@ -98,20 +98,21 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         minorityReputationPenalty = _minorityReputationPenalty;
     }
 
-    // Called by JobMarketplace; DWT tokens already transferred to this contract before this call
-    function initiateDispute(uint256 jobId, address client, uint256 proposedPaymentBps)
+    // Called by JobMarketplace; client must have approved `stakedTokens` to this contract beforehand
+    function initiateDispute(uint256 jobId, address client, uint256 proposedPaymentBps, uint256 stakedTokens)
         external
         onlyRole(MARKETPLACE_ROLE)
     {
         if (disputes[jobId].votingDeadline != 0) revert DisputeAlreadyExists();
+        require(stakedTokens > 0, "DAODispute: stake required");
 
-        uint256 staked = decentraToken.balanceOf(address(this));
+        decentraToken.transferFrom(client, address(this), stakedTokens);
 
         disputes[jobId] = Dispute({
             jobId:              jobId,
             client:             client,
             proposedPaymentBps: proposedPaymentBps,
-            stakedTokens:       staked,
+            stakedTokens:       stakedTokens,
             votingDeadline:     block.timestamp + votingDuration,
             forWeight:          0,
             againstWeight:      0,
