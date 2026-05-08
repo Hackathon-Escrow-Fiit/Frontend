@@ -6,36 +6,37 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
 
-  const marketplace      = await hre.deployments.get("JobMarketplace");
+  const marketplace = await hre.deployments.get("JobMarketplace");
   const reputationSystem = await hre.deployments.get("ReputationSystem");
-  const decentraToken    = await hre.deployments.get("DecentraToken");
+  const decentraToken = await hre.deployments.get("DecentraToken");
 
   const SEVEN_DAYS = 7 * 24 * 60 * 60;
 
   await deploy("DAODispute", {
     from: deployer,
     args: [
-      deployer,                    // defaultAdmin
-      marketplace.address,         // jobMarketplace
-      reputationSystem.address,    // reputationSystem
-      decentraToken.address,       // decentraToken
-      deployer,                    // treasury (update before mainnet)
-      SEVEN_DAYS,                  // votingDuration
-      3,                           // minimumVoters (quorum)
-      8000,                        // voterRewardBps = 80% of stake to majority
-      10,                          // minorityReputationPenalty
+      deployer, // defaultAdmin
+      marketplace.address, // jobMarketplace
+      reputationSystem.address, // reputationSystem
+      decentraToken.address, // decentraToken
+      deployer, // treasury (update before mainnet)
+      SEVEN_DAYS, // votingDuration
+      3, // minimumVoters (quorum)
+      8000, // voterRewardBps = 80% of stake to majority
+      10, // minorityReputationPenalty
+      hre.ethers.parseEther("10"), // minimumTokensToVote (10 DWT)
     ],
     log: true,
     autoMine: true,
   });
 
-  const daoDispute      = await hre.ethers.getContract<Contract>("DAODispute", deployer);
-  const marketplaceCtx  = await hre.ethers.getContract<Contract>("JobMarketplace", deployer);
-  const repSystem       = await hre.ethers.getContract<Contract>("ReputationSystem", deployer);
+  const daoDispute = await hre.ethers.getContract<Contract>("DAODispute", deployer);
+  const marketplaceCtx = await hre.ethers.getContract<Contract>("JobMarketplace", deployer);
+  const repSystem = await hre.ethers.getContract<Contract>("ReputationSystem", deployer);
 
   const DAO_EXECUTOR_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("DAO_EXECUTOR_ROLE"));
-  const MARKETPLACE_ROLE  = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("MARKETPLACE_ROLE"));
-  const DAO_ROLE          = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("DAO_ROLE"));
+  const MARKETPLACE_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("MARKETPLACE_ROLE"));
+  const DAO_ROLE = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("DAO_ROLE"));
 
   const daoAddress = await daoDispute.getAddress();
 

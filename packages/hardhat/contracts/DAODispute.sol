@@ -55,6 +55,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
     uint256 public minimumVoters;
     uint256 public voterRewardBps;           // % of staked tokens to majority voters
     uint256 public minorityReputationPenalty;
+    uint256 public minimumTokensToVote;
 
     mapping(uint256 => Dispute)                   public disputes;
     mapping(uint256 => mapping(address => bool))   public hasVoted;
@@ -72,6 +73,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
     error VotingNotOver();
     error VotingOver();
     error NotEligibleVoter();
+    error InsufficientTokenBalance();
     error AlreadyVoted();
     error DisputeNotFound();
     error DisputeAlreadyExists();
@@ -85,7 +87,8 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         uint256 _votingDuration,
         uint256 _minimumVoters,
         uint256 _voterRewardBps,
-        uint256 _minorityReputationPenalty
+        uint256 _minorityReputationPenalty,
+        uint256 _minimumTokensToVote
     ) {
         _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
         jobMarketplace            = IJobMarketplace(_jobMarketplace);
@@ -96,6 +99,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         minimumVoters             = _minimumVoters;
         voterRewardBps            = _voterRewardBps;
         minorityReputationPenalty = _minorityReputationPenalty;
+        minimumTokensToVote       = _minimumTokensToVote;
     }
 
     // Called by JobMarketplace; client must have approved `stakedTokens` to this contract beforehand
@@ -130,6 +134,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         if (d.finalized) revert AlreadyFinalized();
         if (block.timestamp >= d.votingDeadline) revert VotingOver();
         if (!reputationSystem.hasCompletedJob(msg.sender)) revert NotEligibleVoter();
+        if (decentraToken.balanceOf(msg.sender) < minimumTokensToVote) revert InsufficientTokenBalance();
         if (hasVoted[jobId][msg.sender]) revert AlreadyVoted();
 
         uint256 weight = _calculateVoteWeight(msg.sender, jobId);
@@ -325,5 +330,9 @@ contract DAODispute is AccessControl, ReentrancyGuard {
 
     function setTreasury(address _treasury) external onlyRole(DEFAULT_ADMIN_ROLE) {
         treasury = _treasury;
+    }
+
+    function setMinimumTokensToVote(uint256 _minimum) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        minimumTokensToVote = _minimum;
     }
 }

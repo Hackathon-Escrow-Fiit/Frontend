@@ -13,7 +13,7 @@ interface IReputationSystem {
 }
 
 interface IDAODispute {
-    function initiateDispute(uint256 jobId, address client, uint256 proposedPaymentBps) external;
+    function initiateDispute(uint256 jobId, address client, uint256 proposedPaymentBps, uint256 stakedTokens) external;
 }
 
 contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
@@ -126,10 +126,11 @@ contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
     function postJob(
         string calldata title,
         string calldata description,
+        uint256 budget,
         uint256 deadline,
         string[] calldata skills
-    ) external payable whenNotPaused returns (uint256 jobId) {
-        if (msg.value == 0) revert ZeroBudget();
+    ) external whenNotPaused returns (uint256 jobId) {
+        if (budget == 0) revert ZeroBudget();
         if (deadline <= block.timestamp) revert DeadlineInPast();
 
         jobId = ++jobCount;
@@ -139,7 +140,7 @@ contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
         job.client      = msg.sender;
         job.title       = title;
         job.description = description;
-        job.budget      = msg.value;
+        job.budget      = budget;
         job.deadline    = deadline;
         job.status      = JobStatus.Open;
         job.createdAt   = block.timestamp;
@@ -148,7 +149,9 @@ contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
             job.skills.push(skills[i]);
         }
 
-        jobEscrow[jobId] = msg.value;
+        bool ok = decentraToken.transferFrom(msg.sender, address(this), budget);
+        if (!ok) revert TransferFailed();
+        jobEscrow[jobId] = budget;
 
         if (!hasRole(CLIENT_ROLE, msg.sender)) _grantRole(CLIENT_ROLE, msg.sender);
         reputationSystem.initializeReputation(msg.sender);
@@ -158,7 +161,7 @@ contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
             try IERC20Mintable(address(decentraToken)).mint(msg.sender, jobPostReward) {} catch {}
         }
 
-        emit JobPosted(jobId, msg.sender, msg.value, deadline);
+        emit JobPosted(jobId, msg.sender, budget, deadline);
     }
 
     function placeBid(uint256 jobId, uint256 amount, string calldata proposal)
@@ -199,7 +202,7 @@ contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
         uint256 excess = job.budget - bid.amount;
         if (excess > 0) {
             jobEscrow[jobId] = bid.amount;
-            _sendEth(job.client, excess);
+            _sendTokens(job.client, excess);
         }
 
         emit BidAccepted(jobId, bidIndex, bid.freelancer);
@@ -270,11 +273,11 @@ contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
 
         job.status = JobStatus.DAOVoting;
 
-        // Client must have approved DAODispute to spend their DWT before calling this
+        // Client must have approved this contract to spend their DWT before calling this
         bool ok = decentraToken.transferFrom(msg.sender, address(daoDispute), disputeStake);
         if (!ok) revert TransferFailed();
 
-        daoDispute.initiateDispute(jobId, msg.sender, proposedPaymentBps);
+        daoDispute.initiateDispute(jobId, msg.sender, proposedPaymentBps, disputeStake);
         emit DAODisputeInitiated(jobId, msg.sender, proposedPaymentBps);
     }
 
@@ -340,7 +343,7 @@ contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
         uint256 refund = jobEscrow[jobId];
         job.status = JobStatus.Cancelled;
         jobEscrow[jobId] = 0;
-        _sendEth(job.client, refund);
+        _sendTokens(job.client, refund);
 
         emit JobCancelled(jobId, msg.sender, refund);
     }
@@ -392,21 +395,20 @@ contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
 
     // ─── Internal ─────────────────────────────────────────────────────────────
 
-    // Checks-effects-interactions: jobEscrow zeroed before any .call{value}
     function _releaseEscrow(uint256 jobId, address freelancer) internal returns (uint256 paid) {
         uint256 total = jobEscrow[jobId];
         jobEscrow[jobId] = 0;
 
-        uint256 fee     = (total * platformFeeBps) / 10000;
-        paid            = total - fee;
+        uint256 fee = (total * platformFeeBps) / 10000;
+        paid        = total - fee;
 
-        if (fee > 0) _sendEth(feeRecipient, fee);
-        _sendEth(freelancer, paid);
+        if (fee > 0) _sendTokens(feeRecipient, fee);
+        _sendTokens(freelancer, paid);
     }
 
     function _releasePartialEscrow(uint256 jobId, uint256 paymentBps) internal {
-        uint256 total           = jobEscrow[jobId];
-        jobEscrow[jobId]        = 0;
+        uint256 total    = jobEscrow[jobId];
+        jobEscrow[jobId] = 0;
 
         uint256 freelancerGross = (total * paymentBps) / 10000;
         uint256 fee             = (freelancerGross * platformFeeBps) / 10000;
@@ -414,25 +416,25 @@ contract JobMarketplace is AccessControl, ReentrancyGuard, Pausable {
         uint256 clientRefund    = total - freelancerGross;
 
         Job storage job = jobs[jobId];
-        if (fee > 0) _sendEth(feeRecipient, fee);
-        _sendEth(job.freelancer, freelancerNet);
-        if (clientRefund > 0) _sendEth(job.client, clientRefund);
+        if (fee > 0) _sendTokens(feeRecipient, fee);
+        _sendTokens(job.freelancer, freelancerNet);
+        if (clientRefund > 0) _sendTokens(job.client, clientRefund);
     }
 
     function _splitEscrow(uint256 jobId, address client, address freelancer) internal {
         uint256 total    = jobEscrow[jobId];
         jobEscrow[jobId] = 0;
 
-        uint256 half     = total / 2;
-        uint256 remainder = total - half * 2; // odd wei
+        uint256 half      = total / 2;
+        uint256 remainder = total - half * 2;
 
-        _sendEth(freelancer, half);
-        _sendEth(client, half);
-        if (remainder > 0) _sendEth(feeRecipient, remainder);
+        _sendTokens(freelancer, half);
+        _sendTokens(client, half);
+        if (remainder > 0) _sendTokens(feeRecipient, remainder);
     }
 
-    function _sendEth(address to, uint256 amount) internal {
-        (bool ok,) = to.call{value: amount}("");
+    function _sendTokens(address to, uint256 amount) internal {
+        bool ok = decentraToken.transfer(to, amount);
         if (!ok) revert TransferFailed();
     }
 }
