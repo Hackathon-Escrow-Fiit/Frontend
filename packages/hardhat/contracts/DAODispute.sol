@@ -120,7 +120,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
             finalized:          false
         });
 
-        emit DisputeInitiated(jobId, client, proposedPaymentBps, staked);
+        emit DisputeInitiated(jobId, client, proposedPaymentBps, stakedTokens);
     }
 
     // support = true → agree with client (partial pay); false → full pay to freelancer
