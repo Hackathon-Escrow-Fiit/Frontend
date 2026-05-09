@@ -18,7 +18,11 @@ export const useDecentraWorkRegistry = (nameToCheck?: string) => {
     query: { enabled: debouncedName.length >= 3 },
   });
 
-  const { data: currentName, refetch: refetchName } = useScaffoldReadContract({
+  const {
+    data: currentName,
+    isLoading: isLoadingName,
+    refetch: refetchName,
+  } = useScaffoldReadContract({
     contractName: "DecentraWorkRegistry",
     functionName: "getName",
     args: [address],
@@ -43,6 +47,7 @@ export const useDecentraWorkRegistry = (nameToCheck?: string) => {
     isAvailable: debouncedName.length >= 3 ? isAvailable : undefined,
     isChecking,
     currentName: currentName ?? null,
+    isLoadingName,
     isRegistering,
     register,
     release,
