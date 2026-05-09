@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { blo } from "blo";
 import { useAccount } from "wagmi";
 import {
+  ArrowsRightLeftIcon,
   ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
@@ -29,6 +30,7 @@ const mainNav: NavItem[] = [
   { label: "My Tasks", href: "/my-tasks", Icon: ClipboardDocumentListIcon },
   { label: "Disputes", href: "/disputes", Icon: ShieldExclamationIcon },
   { label: "Wallet", href: "/wallet", Icon: WalletIcon },
+  { label: "Buy NXR", href: "/swap", Icon: ArrowsRightLeftIcon },
   { label: "Profile", href: "/profile", Icon: UserCircleIcon },
 ];
 
