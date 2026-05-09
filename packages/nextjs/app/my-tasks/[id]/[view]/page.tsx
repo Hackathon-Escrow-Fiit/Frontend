@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
   ArrowPathIcon,
+  ArrowUpTrayIcon,
   BoltIcon,
-  BriefcaseIcon,
   BuildingStorefrontIcon,
   ChatBubbleLeftEllipsisIcon,
   CheckBadgeIcon,
@@ -98,6 +98,7 @@ const DonutChart = ({ score }: { score: number }) => {
 
 export default function TaskViewPage() {
   const { id, view } = useParams<{ id: string; view: string }>();
+  const router = useRouter();
   const [role, setRole] = useState<Role>("client");
 
   useEffect(() => {
@@ -447,7 +448,10 @@ export default function TaskViewPage() {
                       ecosystem.
                     </p>
                   </div>
-                  <button className="btn btn-outline btn-sm gap-2 shrink-0">
+                  <button
+                    className="btn btn-outline btn-sm gap-2 shrink-0"
+                    onClick={() => !isClient && router.push(`/my-tasks/${id}/submit`)}
+                  >
                     <ArrowPathIcon className="w-4 h-4" />
                     {isClient ? "Request Update" : "Submit Work"}
                   </button>
@@ -534,19 +538,20 @@ export default function TaskViewPage() {
                     <UserCircleIcon className="w-4 h-4" />
                     View Profile
                   </button>
-                  <button className="btn btn-outline w-full gap-2">
-                    {isClient ? (
-                      <>
-                        <CurrencyDollarIcon className="w-4 h-4" />
-                        Release Escrow
-                      </>
-                    ) : (
-                      <>
-                        <BriefcaseIcon className="w-4 h-4" />
-                        Request Payment
-                      </>
-                    )}
-                  </button>
+                  {isClient ? (
+                    <button className="btn btn-outline w-full gap-2">
+                      <CurrencyDollarIcon className="w-4 h-4" />
+                      Release Escrow
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-primary w-full gap-2"
+                      onClick={() => router.push(`/my-tasks/${id}/submit`)}
+                    >
+                      <ArrowUpTrayIcon className="w-4 h-4" />
+                      Submit Task
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
