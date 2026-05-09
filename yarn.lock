@@ -354,6 +354,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@emoji-mart/data@npm:^1.2.1":
+  version: 1.2.1
+  resolution: "@emoji-mart/data@npm:1.2.1"
+  checksum: 10/a9f50edaf354aadfede604fb26d80055a085e9160db2c924fd5e6afc27033cd5beb0006a9ee48240ce9c543e58e1bf1cf9ed83baba5db83a395154984b30bd91
+  languageName: node
+  linkType: hard
+
+"@emoji-mart/react@npm:^1.1.1":
+  version: 1.1.1
+  resolution: "@emoji-mart/react@npm:1.1.1"
+  peerDependencies:
+    emoji-mart: ^5.2
+    react: ^16.8 || ^17 || ^18
+  checksum: 10/def4dddaa01ce88c396510d84d1878b881fe0f9c484a836a50e3db784a91ab98edf94816cff503b4d1cab7b00400a01c87e32d19dee2d950f64ef9243f79101e
+  languageName: node
+  linkType: hard
+
 "@emotion/hash@npm:^0.9.0":
   version: 0.9.2
   resolution: "@emotion/hash@npm:0.9.2"
@@ -3003,6 +3020,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@noble/secp256k1@npm:^2.2.3":
+  version: 2.3.0
+  resolution: "@noble/secp256k1@npm:2.3.0"
+  checksum: 10/3e2669aae45612cebccdac466e584e9b35329cc3a28528100dc0bd17c16244336678a0ea663ccad6e32873ea15259ae57cf208f1ce03e475ae063b42e6561e3a
+  languageName: node
+  linkType: hard
+
 "@noble/secp256k1@npm:~1.7.0":
   version: 1.7.2
   resolution: "@noble/secp256k1@npm:1.7.2"
@@ -4278,6 +4302,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@se-2/nextjs@workspace:packages/nextjs"
   dependencies:
+    "@emoji-mart/data": "npm:^1.2.1"
+    "@emoji-mart/react": "npm:^1.1.1"
     "@heroicons/react": "npm:~2.1.5"
     "@rainbow-me/rainbowkit": "npm:2.2.9"
     "@react-native-async-storage/async-storage": "npm:~2.2.0"
@@ -4289,12 +4315,15 @@ __metadata:
     "@trivago/prettier-plugin-sort-imports": "npm:~4.3.0"
     "@types/node": "npm:~18.19.50"
     "@types/react": "npm:~19.0.7"
+    "@xmtp/browser-sdk": "npm:^7.0.0"
+    "@xmtp/content-type-remote-attachment": "npm:^2.0.4"
     abitype: "npm:1.0.6"
     autoprefixer: "npm:~10.4.20"
     bgipfs: "npm:~0.0.12"
     blo: "npm:~1.2.0"
     burner-connector: "npm:0.0.20"
     daisyui: "npm:5.0.9"
+    emoji-mart: "npm:^5.6.0"
     eslint: "npm:~9.23.0"
     eslint-config-next: "npm:~15.2.3"
     eslint-config-prettier: "npm:~10.1.1"
@@ -7101,6 +7130,76 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@xmtp/browser-sdk@npm:^7.0.0":
+  version: 7.0.0
+  resolution: "@xmtp/browser-sdk@npm:7.0.0"
+  dependencies:
+    "@xmtp/content-type-primitives": "npm:3.0.0"
+    "@xmtp/wasm-bindings": "npm:1.10.0"
+  peerDependencies:
+    viem: ">=2"
+  peerDependenciesMeta:
+    viem:
+      optional: true
+  checksum: 10/628c660271e82888fbc41aec00e7d728b7727bda3b2253c29bfc7860c6a66fa49157503995cab4f1b89a0cfdb5417002bf911035b9854db1ea4e0b9155429dff
+  languageName: node
+  linkType: hard
+
+"@xmtp/content-type-primitives@npm:3.0.0":
+  version: 3.0.0
+  resolution: "@xmtp/content-type-primitives@npm:3.0.0"
+  dependencies:
+    "@xmtp/node-bindings": "npm:1.8.0"
+  checksum: 10/b70fccaad3e9192de10f7a0838feb28feb6c919aca42da9b0b7b5a003a69f1078cec4b3bb56a07ead824471f928144931494b3f88da24af4538165aa92b1ced2
+  languageName: node
+  linkType: hard
+
+"@xmtp/content-type-primitives@npm:^2.0.2":
+  version: 2.0.3
+  resolution: "@xmtp/content-type-primitives@npm:2.0.3"
+  dependencies:
+    "@xmtp/proto": "npm:3.78.0"
+  checksum: 10/effd1a6790acb01093a497ac55f34281e3f60b75f7289375da2abb0cd764f791fb58a040a00b40a125b857e4174e985bb92d83454d0de78c52a4e711cece9f1e
+  languageName: node
+  linkType: hard
+
+"@xmtp/content-type-remote-attachment@npm:^2.0.4":
+  version: 2.0.4
+  resolution: "@xmtp/content-type-remote-attachment@npm:2.0.4"
+  dependencies:
+    "@noble/secp256k1": "npm:^2.2.3"
+    "@xmtp/content-type-primitives": "npm:^2.0.2"
+    "@xmtp/proto": "npm:3.78.0"
+  checksum: 10/52bbc57ceead576430a08661e5d540f43fdba21f9eb0a2dbb422fbc0dc9b6d27e32921d454155f41fcde746fae602c2b6e01eecd58943e26e44d5cfe9dda0ca3
+  languageName: node
+  linkType: hard
+
+"@xmtp/node-bindings@npm:1.8.0":
+  version: 1.8.0
+  resolution: "@xmtp/node-bindings@npm:1.8.0"
+  checksum: 10/bd9678d21f5e2ab12350ad12f500d2e7d9b4b7c479e38d4ddc45c5691d226460b2aa024c1eed21934d63ea600103dd0e267d04a4b25972b6c7cb68bc2045a892
+  languageName: node
+  linkType: hard
+
+"@xmtp/proto@npm:3.78.0":
+  version: 3.78.0
+  resolution: "@xmtp/proto@npm:3.78.0"
+  dependencies:
+    long: "npm:^5.2.0"
+    protobufjs: "npm:^7.0.0"
+    rxjs: "npm:^7.8.0"
+    undici: "npm:^5.8.1"
+  checksum: 10/11ed8017c5d59fe64f647dd27395241dc644c517263bbc0c729826def08c0cd569db79bae06445fff84cc417d4a4dabd28b87789e3de1e937409598b11c7f213
+  languageName: node
+  linkType: hard
+
+"@xmtp/wasm-bindings@npm:1.10.0":
+  version: 1.10.0
+  resolution: "@xmtp/wasm-bindings@npm:1.10.0"
+  checksum: 10/09e5767fb46387195524f7299255c08745a283c97a00b88a91278de34f63893f35a6b98f5b22d634782eca67345558c1927d433078f8e34b8946db1132d5cf26
+  languageName: node
+  linkType: hard
+
 "abbrev@npm:1":
   version: 1.1.1
   resolution: "abbrev@npm:1.1.1"
@@ -9520,6 +9619,13 @@ __metadata:
     minimalistic-assert: "npm:^1.0.1"
     minimalistic-crypto-utils: "npm:^1.0.1"
   checksum: 10/dc678c9febd89a219c4008ba3a9abb82237be853d9fd171cd602c8fb5ec39927e65c6b5e7a1b2a4ea82ee8e0ded72275e7932bb2da04a5790c2638b818e4e1c5
+  languageName: node
+  linkType: hard
+
+"emoji-mart@npm:^5.6.0":
+  version: 5.6.0
+  resolution: "emoji-mart@npm:5.6.0"
+  checksum: 10/fbbd6ce6fe6bc30020a7de4bfd6375f3c00da9880a147fdbee37303d985856e5463a48a61177166ad056a355e0bd589df9c0866bd54f9c065d60a9efa80639dd
   languageName: node
   linkType: hard
 
@@ -13745,7 +13851,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"long@npm:^5.0.0":
+"long@npm:^5.0.0, long@npm:^5.2.0":
   version: 5.3.2
   resolution: "long@npm:5.3.2"
   checksum: 10/b6b55ddae56fcce2864d37119d6b02fe28f6dd6d9e44fd22705f86a9254b9321bd69e9ffe35263b4846d54aba197c64882adcb8c543f2383c1e41284b321ea64
@@ -16056,7 +16162,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"protobufjs@npm:^7.1.2":
+"protobufjs@npm:^7.0.0, protobufjs@npm:^7.1.2":
   version: 7.5.6
   resolution: "protobufjs@npm:7.5.6"
   dependencies:
@@ -18680,7 +18786,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"undici@npm:^5.14.0":
+"undici@npm:^5.14.0, undici@npm:^5.8.1":
   version: 5.29.0
   resolution: "undici@npm:5.29.0"
   dependencies:
