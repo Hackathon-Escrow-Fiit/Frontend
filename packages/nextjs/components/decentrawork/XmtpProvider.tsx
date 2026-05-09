@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { Client } from "@xmtp/browser-sdk";
 import { useWalletClient } from "wagmi";
 import { clearXmtpClient, getXmtpClient } from "~~/services/xmtp/client";
@@ -46,6 +46,17 @@ export function XmtpProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   }, [walletClient]);
+
+  // Auto-connect when walletClient becomes available (wallet already connected on page load)
+  useEffect(() => {
+    if (walletClient && !client && !isLoading && !error) {
+      connect();
+    }
+    // Clear stale "no wallet" error once walletClient resolves
+    if (walletClient && error === "Connect your wallet first before enabling messaging.") {
+      setError(null);
+    }
+  }, [walletClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const disconnect = useCallback(() => {
     if (addressRef.current) {

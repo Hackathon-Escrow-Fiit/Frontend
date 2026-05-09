@@ -21,6 +21,7 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useAccount } from "wagmi";
+import { notification } from "~~/utils/scaffold-eth";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
 import type { Dm } from "@xmtp/browser-sdk";
 import { useXmtp } from "~~/hooks/useXmtp";
@@ -219,7 +220,11 @@ function ChatPanel({ entry }: { entry: XmtpConversation }) {
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    await sendAttachment(file);
+    try {
+      await sendAttachment(file);
+    } catch (err) {
+      notification.error(err instanceof Error ? err.message : "Failed to send attachment");
+    }
     e.target.value = "";
   };
 
