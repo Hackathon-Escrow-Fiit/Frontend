@@ -147,6 +147,8 @@ export default function TaskViewPage() {
   const [submittedFiles, setSubmittedFiles] = useState<SubmittedFile[]>([]);
   const [approveLoading, setApproveLoading] = useState(false);
   const [approved, setApproved] = useState(false);
+  const [approveResult, setApproveResult] = useState<ApproveResult | null>(null);
+  const [showResultModal, setShowResultModal] = useState(false);
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -790,27 +792,27 @@ export default function TaskViewPage() {
                       </p>
                       <div className="grid grid-cols-2 gap-3 mb-4">
                         <div className="bg-success/8 border border-success/20 rounded-2xl p-4 text-center">
-                          <p className="text-2xl font-bold text-success">+{approveResult.reputation_delta}</p>
+                          <p className="text-2xl font-bold text-success">+{approveResult!.reputation_delta}</p>
                           <p className="text-[10px] text-base-content/50 mt-1 uppercase tracking-wider">Reputation</p>
                         </div>
                         <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4 text-center">
-                          <p className="text-2xl font-bold text-primary">+{approveResult.elo.elo_delta}</p>
+                          <p className="text-2xl font-bold text-primary">+{approveResult!.elo.elo_delta}</p>
                           <p className="text-[10px] text-base-content/50 mt-1 uppercase tracking-wider">ELO</p>
                         </div>
                       </div>
-                      {approveResult.elo.tier_changed && (
+                      {approveResult!.elo.tier_changed && (
                         <div className="bg-warning/10 border border-warning/20 rounded-xl px-4 py-3 flex items-center gap-2 mb-3">
                           <span className="text-warning text-base">★</span>
                           <p className="text-xs font-semibold text-warning">
-                            Tier up! {approveResult.elo.old_tier} → {approveResult.elo.new_tier}
+                            Tier up! {approveResult!.elo.old_tier} → {approveResult!.elo.new_tier}
                           </p>
                         </div>
                       )}
-                      {Object.keys(approveResult.skill_changes).length > 0 && (
+                      {Object.keys(approveResult!.skill_changes).length > 0 && (
                         <div>
                           <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-2">Skills Updated</p>
                           <div className="space-y-1.5">
-                            {Object.entries(approveResult.skill_changes).map(([skill, level]) => (
+                            {Object.entries(approveResult!.skill_changes).map(([skill, level]) => (
                               <div key={skill} className="flex items-center justify-between text-xs">
                                 <span className="text-base-content/70 capitalize">{skill}</span>
                                 <span className="font-bold text-primary">{level.toFixed(1)}<span className="text-base-content/40 font-normal">/10</span></span>
@@ -864,7 +866,7 @@ export default function TaskViewPage() {
                       <div className="bg-warning/10 border border-warning/20 rounded-xl px-4 py-3 flex items-center gap-2 mt-3">
                         <span className="text-warning text-base">★</span>
                         <p className="text-xs font-semibold text-warning">
-                          Tier up! {approveResult.elo.old_tier} → {approveResult.elo.new_tier}
+                          Tier up! {approveResult!.elo.old_tier} → {approveResult!.elo.new_tier}
                         </p>
                       </div>
                     )}
@@ -872,10 +874,10 @@ export default function TaskViewPage() {
 
                   {/* Skills improved */}
                   {(() => {
-                    const skills = approveResult
-                      ? approveResult.skill_changes
+                    const skills: Record<string, number> = approveResult
+                      ? approveResult!.skill_changes
                       : report?.suggested_skills
-                        ? Object.fromEntries(Object.entries(report.suggested_skills).map(([k, v]) => [k, v.new_level]))
+                        ? Object.fromEntries(Object.entries(report!.suggested_skills!).map(([k, v]) => [k, v.new_level]))
                         : {};
                     const entries = Object.entries(skills);
                     if (!entries.length) return null;
