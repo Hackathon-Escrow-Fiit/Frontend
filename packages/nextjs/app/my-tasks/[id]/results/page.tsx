@@ -9,9 +9,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   CodeBracketIcon,
-  CurrencyDollarIcon,
   DocumentTextIcon,
-  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
 
@@ -130,7 +128,10 @@ export default function ResultsPage() {
               ) : (
                 <div className="space-y-2">
                   {submittedFiles.map(f => (
-                    <div key={f.filename} className="flex items-center gap-3 border border-base-200 rounded-xl px-4 py-3">
+                    <div
+                      key={f.filename}
+                      className="flex items-center gap-3 border border-base-200 rounded-xl px-4 py-3"
+                    >
                       <CodeBracketIcon className="w-4 h-4 text-primary shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="font-mono text-sm text-base-content/80 truncate">{f.filename}</p>
@@ -181,14 +182,17 @@ export default function ResultsPage() {
 
               {skillEntries.length > 0 && (
                 <>
-                  <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Skills Updated</p>
+                  <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
+                    Skills Updated
+                  </p>
                   <div className="space-y-3">
                     {skillEntries.map(([skill, level]) => (
                       <div key={skill}>
                         <div className="flex items-center justify-between text-sm mb-1">
                           <span className="text-base-content/70 capitalize font-medium">{skill}</span>
                           <span className="font-bold text-primary">
-                            {level.toFixed(1)}<span className="text-base-content/40 font-normal">/10</span>
+                            {level.toFixed(1)}
+                            <span className="text-base-content/40 font-normal">/10</span>
                           </span>
                         </div>
                         <div className="w-full bg-base-200 rounded-full h-2">
@@ -261,9 +265,7 @@ export default function ResultsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-success/8 border border-success/20 rounded-2xl p-4 text-center">
                   <p className="text-3xl font-bold text-success">
-                    {report?.suggested_reputation_delta != null
-                      ? `+${report.suggested_reputation_delta}`
-                      : "—"}
+                    {report?.suggested_reputation_delta != null ? `+${report.suggested_reputation_delta}` : "—"}
                   </p>
                   <p className="text-xs text-base-content/50 mt-1 uppercase tracking-wider">Reputation</p>
                 </div>
@@ -289,7 +291,8 @@ export default function ResultsPage() {
                         <div className="flex items-center justify-between text-sm mb-1">
                           <span className="text-base-content/70 capitalize font-medium">{skill}</span>
                           <span className="font-bold text-primary">
-                            {level.toFixed(1)}<span className="text-base-content/40 font-normal">/10</span>
+                            {level.toFixed(1)}
+                            <span className="text-base-content/40 font-normal">/10</span>
                           </span>
                         </div>
                         <div className="w-full bg-base-200 rounded-full h-2 mb-1.5">
@@ -298,9 +301,7 @@ export default function ResultsPage() {
                             style={{ width: `${(level / 10) * 100}%` }}
                           />
                         </div>
-                        {reasoning && (
-                          <p className="text-xs text-base-content/40 leading-relaxed">{reasoning}</p>
-                        )}
+                        {reasoning && <p className="text-xs text-base-content/40 leading-relaxed">{reasoning}</p>}
                       </div>
                     );
                   })}

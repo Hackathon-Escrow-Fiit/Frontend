@@ -23,7 +23,6 @@ import {
   ShieldCheckIcon,
   UserCircleIcon,
   UserGroupIcon,
-  XCircleIcon,
 } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as CheckCircleSolid, ExclamationCircleIcon } from "@heroicons/react/24/solid";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
@@ -147,8 +146,8 @@ export default function TaskViewPage() {
   const [submittedFiles, setSubmittedFiles] = useState<SubmittedFile[]>([]);
   const [approveLoading, setApproveLoading] = useState(false);
   const [approved, setApproved] = useState(false);
-  const [approveResult, setApproveResult] = useState<ApproveResult | null>(null);
-  const [showResultModal, setShowResultModal] = useState(false);
+  const [approveResult] = useState<ApproveResult | null>(null);
+  const [, setShowResultModal] = useState(false);
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -221,10 +220,7 @@ export default function TaskViewPage() {
   };
 
   const goToFreelancerResults = () => {
-    sessionStorage.setItem(
-      `dw_results_${id}`,
-      JSON.stringify({ role: "freelancer", report, submittedFiles }),
-    );
+    sessionStorage.setItem(`dw_results_${id}`, JSON.stringify({ role: "freelancer", report, submittedFiles }));
     router.push(`/my-tasks/${id}/results`);
   };
 
@@ -643,11 +639,17 @@ export default function TaskViewPage() {
                           disabled={approveLoading || approved}
                         >
                           {approveLoading ? (
-                            <><span className="loading loading-spinner loading-xs" /> Processing…</>
+                            <>
+                              <span className="loading loading-spinner loading-xs" /> Processing…
+                            </>
                           ) : approved ? (
-                            <><CheckCircleIcon className="w-5 h-5" /> Payment Released</>
+                            <>
+                              <CheckCircleIcon className="w-5 h-5" /> Payment Released
+                            </>
                           ) : (
-                            <><CurrencyDollarIcon className="w-5 h-5" /> Approve &amp; Release Payment</>
+                            <>
+                              <CurrencyDollarIcon className="w-5 h-5" /> Approve &amp; Release Payment
+                            </>
                           )}
                         </button>
                         <button className="btn btn-outline w-full gap-2">
@@ -685,10 +687,7 @@ export default function TaskViewPage() {
                           ))}
                         </div>
                       </div>
-                      <button
-                        onClick={goToFreelancerResults}
-                        className="btn btn-outline btn-sm w-full gap-2"
-                      >
+                      <button onClick={goToFreelancerResults} className="btn btn-outline btn-sm w-full gap-2">
                         <CheckCircleIcon className="w-4 h-4" />
                         View My Evaluation Results
                       </button>
@@ -736,7 +735,6 @@ export default function TaskViewPage() {
         {false && (
           <div>
             <div className="bg-base-100 rounded-3xl border border-base-200 shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-
               {isClient ? (
                 /* ── CLIENT VIEW ── */
                 <>
@@ -751,7 +749,12 @@ export default function TaskViewPage() {
                         <p className="text-xs text-base-content/50">Escrow funds sent to freelancer wallet</p>
                       </div>
                     </div>
-                    <button onClick={() => setShowResultModal(false)} className="btn btn-ghost btn-sm btn-square text-base-content/40">✕</button>
+                    <button
+                      onClick={() => setShowResultModal(false)}
+                      className="btn btn-ghost btn-sm btn-square text-base-content/40"
+                    >
+                      ✕
+                    </button>
                   </div>
 
                   {/* Submitted files */}
@@ -764,7 +767,10 @@ export default function TaskViewPage() {
                     ) : (
                       <div className="space-y-2">
                         {submittedFiles.map(f => (
-                          <div key={f.filename} className="flex items-center gap-3 border border-base-200 rounded-xl px-4 py-3">
+                          <div
+                            key={f.filename}
+                            className="flex items-center gap-3 border border-base-200 rounded-xl px-4 py-3"
+                          >
                             <CodeBracketIcon className="w-4 h-4 text-primary shrink-0" />
                             <div className="flex-1 min-w-0">
                               <p className="font-mono text-xs text-base-content/80 truncate">{f.filename}</p>
@@ -810,12 +816,17 @@ export default function TaskViewPage() {
                       )}
                       {Object.keys(approveResult!.skill_changes).length > 0 && (
                         <div>
-                          <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-2">Skills Updated</p>
+                          <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-2">
+                            Skills Updated
+                          </p>
                           <div className="space-y-1.5">
                             {Object.entries(approveResult!.skill_changes).map(([skill, level]) => (
                               <div key={skill} className="flex items-center justify-between text-xs">
                                 <span className="text-base-content/70 capitalize">{skill}</span>
-                                <span className="font-bold text-primary">{level.toFixed(1)}<span className="text-base-content/40 font-normal">/10</span></span>
+                                <span className="font-bold text-primary">
+                                  {level.toFixed(1)}
+                                  <span className="text-base-content/40 font-normal">/10</span>
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -840,7 +851,12 @@ export default function TaskViewPage() {
                         </p>
                       </div>
                     </div>
-                    <button onClick={() => setShowResultModal(false)} className="btn btn-ghost btn-sm btn-square text-base-content/40">✕</button>
+                    <button
+                      onClick={() => setShowResultModal(false)}
+                      className="btn btn-ghost btn-sm btn-square text-base-content/40"
+                    >
+                      ✕
+                    </button>
                   </div>
 
                   {/* Rank / ELO gained */}
@@ -856,9 +872,7 @@ export default function TaskViewPage() {
                         <p className="text-[10px] text-base-content/50 mt-1 uppercase tracking-wider">Reputation</p>
                       </div>
                       <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4 text-center">
-                        <p className="text-2xl font-bold text-primary">
-                          +{approveResult?.elo.elo_delta ?? "~?"}
-                        </p>
+                        <p className="text-2xl font-bold text-primary">+{approveResult?.elo.elo_delta ?? "~?"}</p>
                         <p className="text-[10px] text-base-content/50 mt-1 uppercase tracking-wider">ELO</p>
                       </div>
                     </div>
@@ -877,7 +891,9 @@ export default function TaskViewPage() {
                     const skills: Record<string, number> = approveResult
                       ? approveResult!.skill_changes
                       : report?.suggested_skills
-                        ? Object.fromEntries(Object.entries(report!.suggested_skills!).map(([k, v]) => [k, v.new_level]))
+                        ? Object.fromEntries(
+                            Object.entries(report!.suggested_skills!).map(([k, v]) => [k, v.new_level]),
+                          )
                         : {};
                     const entries = Object.entries(skills);
                     if (!entries.length) return null;
@@ -891,7 +907,10 @@ export default function TaskViewPage() {
                             <div key={skill}>
                               <div className="flex items-center justify-between text-xs mb-1">
                                 <span className="text-base-content/70 capitalize font-medium">{skill}</span>
-                                <span className="font-bold text-primary">{(level as number).toFixed(1)}<span className="text-base-content/40 font-normal">/10</span></span>
+                                <span className="font-bold text-primary">
+                                  {(level as number).toFixed(1)}
+                                  <span className="text-base-content/40 font-normal">/10</span>
+                                </span>
                               </div>
                               <div className="w-full bg-base-200 rounded-full h-1.5">
                                 <div
@@ -919,13 +938,17 @@ export default function TaskViewPage() {
                         <CheckCircleIcon className="w-6 h-6 text-success shrink-0" />
                         <div>
                           <p className="text-sm font-semibold text-success">Escrow released to your wallet</p>
-                          <p className="text-xs text-base-content/50 mt-0.5">Check your connected wallet for the NXR transfer.</p>
+                          <p className="text-xs text-base-content/50 mt-0.5">
+                            Check your connected wallet for the NXR transfer.
+                          </p>
                         </div>
                       </div>
                     ) : (
                       <div className="bg-base-200 rounded-2xl p-4 flex items-center gap-3">
                         <ClockIcon className="w-5 h-5 text-base-content/40 shrink-0" />
-                        <p className="text-xs text-base-content/60">Payment will be released to your wallet once the client approves.</p>
+                        <p className="text-xs text-base-content/60">
+                          Payment will be released to your wallet once the client approves.
+                        </p>
                       </div>
                     )}
                   </div>

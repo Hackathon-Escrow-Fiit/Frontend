@@ -86,6 +86,10 @@
     margin: 1rem 0;
   }
 
+  html {
+    font-size: 18px;
+  }
+
   body {
     min-height: 100vh;
   }

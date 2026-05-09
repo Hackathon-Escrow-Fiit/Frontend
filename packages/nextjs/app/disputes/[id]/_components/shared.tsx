@@ -59,9 +59,26 @@ export const useDisputeData = (id: string) => {
 
   const dispute = useMemo(() => {
     if (!rawDispute) return null;
-    const [proposedPaymentBps, stakedTokens, votingDeadline, forWeight, againstWeight, voterCount, finalized, defenseStatement] =
-      rawDispute as readonly [bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
-    return { proposedPaymentBps, stakedTokens, votingDeadline, forWeight, againstWeight, voterCount, finalized, defenseStatement };
+    const [
+      proposedPaymentBps,
+      stakedTokens,
+      votingDeadline,
+      forWeight,
+      againstWeight,
+      voterCount,
+      finalized,
+      defenseStatement,
+    ] = rawDispute as readonly [bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
+    return {
+      proposedPaymentBps,
+      stakedTokens,
+      votingDeadline,
+      forWeight,
+      againstWeight,
+      voterCount,
+      finalized,
+      defenseStatement,
+    };
   }, [rawDispute]);
 
   return { job, dispute };
@@ -93,11 +110,11 @@ export const DisputeHeader = ({
     <>
       <div className="flex items-center gap-2 mb-4">
         <Link
-          href="/my-tasks"
+          href="/disputes"
           className="flex items-center gap-1.5 text-sm text-base-content/50 hover:text-base-content transition-colors"
         >
           <ArrowLeftIcon className="w-4 h-4" />
-          Back to My Tasks
+          Back to My Disputes
         </Link>
       </div>
 

@@ -10,6 +10,7 @@ import {
   ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
   QuestionMarkCircleIcon,
+  ScaleIcon,
   ShieldExclamationIcon,
   Squares2X2Icon,
   UserCircleIcon,
@@ -27,13 +28,16 @@ const mainNav: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", Icon: Squares2X2Icon },
   { label: "Messages", href: "/messages", Icon: ChatBubbleLeftRightIcon },
   { label: "My Tasks", href: "/my-tasks", Icon: ClipboardDocumentListIcon },
-  { label: "Disputes", href: "/disputes", Icon: ShieldExclamationIcon },
+  { label: "My Disputes", href: "/disputes", Icon: ShieldExclamationIcon },
+  { label: "Juror Portal", href: "/juror", Icon: ScaleIcon },
   { label: "Wallet", href: "/wallet", Icon: WalletIcon },
   { label: "Buy NXR", href: "/swap", Icon: ArrowsRightLeftIcon },
   { label: "Profile", href: "/profile", Icon: UserCircleIcon },
 ];
 
 const bottomNav: NavItem[] = [{ label: "Support", href: "/support", Icon: QuestionMarkCircleIcon }];
+
+const FREELANCER_ONLY = ["/juror"];
 
 const NavLink = ({ item, active }: { item: NavItem; active: boolean }) => (
   <Link
@@ -97,9 +101,11 @@ export const Sidebar = () => {
       </div>
 
       <nav className="flex-1 px-3 py-3">
-        {mainNav.map(item => (
-          <NavLink key={item.href} item={item} active={isActive(item.href)} />
-        ))}
+        {mainNav
+          .filter(item => !(role === "client" && FREELANCER_ONLY.includes(item.href)))
+          .map(item => (
+            <NavLink key={item.href} item={item} active={isActive(item.href)} />
+          ))}
       </nav>
 
       <div className="px-3 py-3 border-t border-base-200">
