@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import "@rainbow-me/rainbowkit/styles.css";
 import "@scaffold-ui/components/styles.css";
 import { ScaffoldEthAppWithProviders } from "~~/components/ScaffoldEthAppWithProviders";
@@ -10,11 +11,11 @@ export const metadata = getMetadata({
   description: "Built with 🏗 Scaffold-ETH 2",
 });
 
-const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
+const ScaffoldEthApp = ({ children }: { children: ReactNode }) => {
   return (
     <html suppressHydrationWarning className={``}>
       <body>
-        <ThemeProvider enableSystem>
+        <ThemeProvider defaultTheme="light">
           <ScaffoldEthAppWithProviders>{children}</ScaffoldEthAppWithProviders>
         </ThemeProvider>
       </body>
