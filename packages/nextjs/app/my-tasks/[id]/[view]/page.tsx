@@ -125,9 +125,30 @@ export default function TaskViewPage() {
     requirements_check: RequirementCheck[];
     files_submitted: string[];
     files_missing: string[];
+    suggested_reputation_delta: number | null;
+    suggested_skills: Record<string, { new_level: number; reasoning?: string }> | null;
+  };
+  type ApproveResult = {
+    freelancer: string;
+    skill_changes: Record<string, number>;
+    reputation_delta: number;
+    elo: {
+      old_elo: number;
+      new_elo: number;
+      elo_delta: number;
+      old_tier: string;
+      new_tier: string;
+      tier_changed: boolean;
+    };
   };
   const [report, setReport] = useState<Report | null>(null);
   const [reportExpanded, setReportExpanded] = useState(false);
+  type SubmittedFile = { filename: string; size: number };
+  const [submittedFiles, setSubmittedFiles] = useState<SubmittedFile[]>([]);
+  const [approveLoading, setApproveLoading] = useState(false);
+  const [approved, setApproved] = useState(false);
+
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
   useEffect(() => {
     const stored = localStorage.getItem("dw_role");
@@ -136,7 +157,6 @@ export default function TaskViewPage() {
 
   useEffect(() => {
     if (view !== "waiting") return;
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
     const fetchReport = async () => {
       try {
@@ -145,17 +165,66 @@ export default function TaskViewPage() {
         const data: Report = await res.json();
         setReport(data);
         return data.status;
-      } catch { return null; }
+      } catch {
+        return null;
+      }
     };
 
-    fetchReport(); // immediate first fetch
+    const fetchFiles = async () => {
+      try {
+        const res = await fetch(`${backendUrl}/files/${id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const files: SubmittedFile[] = Array.isArray(data) ? data : (data.files ?? []);
+        setSubmittedFiles(files);
+      } catch {
+        // files not yet available
+      }
+    };
+
+    fetchReport();
+    fetchFiles();
     const interval = setInterval(async () => {
       const status = await fetchReport();
-      if (status && status !== "evaluating") clearInterval(interval);
+      if (status && status !== "evaluating") {
+        clearInterval(interval);
+        fetchFiles();
+      }
     }, 5000);
 
     return () => clearInterval(interval);
   }, [view, id]);
+
+  const handleApprove = async () => {
+    setApproveLoading(true);
+    try {
+      const res = await fetch(`${backendUrl}/client-decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ escrow_id: id, decision: "approve" }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data: ApproveResult = await res.json();
+      setApproved(true);
+      sessionStorage.setItem(
+        `dw_results_${id}`,
+        JSON.stringify({ role: "client", approveResult: data, submittedFiles, report }),
+      );
+      router.push(`/my-tasks/${id}/results`);
+    } catch (e) {
+      console.error("Approve failed:", e);
+    } finally {
+      setApproveLoading(false);
+    }
+  };
+
+  const goToFreelancerResults = () => {
+    sessionStorage.setItem(
+      `dw_results_${id}`,
+      JSON.stringify({ role: "freelancer", report, submittedFiles }),
+    );
+    router.push(`/my-tasks/${id}/results`);
+  };
 
   const isClient = role === "client";
   const clientViews = ["bids", "active", "review"];
@@ -184,24 +253,50 @@ export default function TaskViewPage() {
 
     const rec = report?.recommendation;
     const recConfig: Record<string, { bg: string; border: string; text: string; label: string; icon: string }> = {
-      approve:         { bg: "bg-success/10", border: "border-success/30", text: "text-success", label: "AI Recommends Approval", icon: "✓" },
-      reject:          { bg: "bg-error/10",   border: "border-error/30",   text: "text-error",   label: "AI Recommends Rejection", icon: "✗" },
-      escalate_to_dao: { bg: "bg-warning/10", border: "border-warning/30", text: "text-warning", label: "AI: Escalate to DAO",    icon: "⚠" },
+      approve: {
+        bg: "bg-success/10",
+        border: "border-success/30",
+        text: "text-success",
+        label: "AI Recommends Approval",
+        icon: "✓",
+      },
+      reject: {
+        bg: "bg-error/10",
+        border: "border-error/30",
+        text: "text-error",
+        label: "AI Recommends Rejection",
+        icon: "✗",
+      },
+      escalate_to_dao: {
+        bg: "bg-warning/10",
+        border: "border-warning/30",
+        text: "text-warning",
+        label: "AI: Escalate to DAO",
+        icon: "⚠",
+      },
     };
-    const recStyle = rec ? (recConfig[rec] ?? { bg: "bg-base-200", border: "border-base-300", text: "text-base-content", label: rec, icon: "?" }) : null;
+    const recStyle = rec
+      ? (recConfig[rec] ?? {
+          bg: "bg-base-200",
+          border: "border-base-300",
+          text: "text-base-content",
+          label: rec,
+          icon: "?",
+        })
+      : null;
 
     const sevStyle = (s: string) => {
-      if (s === "critical") return { badge: "bg-error text-error-content",   bar: "bg-error",   text: "text-error" };
-      if (s === "high")     return { badge: "bg-warning text-warning-content", bar: "bg-warning", text: "text-warning" };
-      if (s === "medium")   return { badge: "bg-info text-info-content",      bar: "bg-info",    text: "text-info" };
-      return                       { badge: "bg-base-300 text-base-content",  bar: "bg-base-300", text: "text-base-content/60" };
+      if (s === "critical") return { badge: "bg-error text-error-content", bar: "bg-error", text: "text-error" };
+      if (s === "high") return { badge: "bg-warning text-warning-content", bar: "bg-warning", text: "text-warning" };
+      if (s === "medium") return { badge: "bg-info text-info-content", bar: "bg-info", text: "text-info" };
+      return { badge: "bg-base-300 text-base-content", bar: "bg-base-300", text: "text-base-content/60" };
     };
 
     const conf = report?.confidence_score ?? 0;
     const confColor = conf >= 70 ? "text-success" : conf >= 40 ? "text-warning" : "text-error";
     const confBarColor = conf >= 70 ? "bg-success" : conf >= 40 ? "bg-warning" : "bg-error";
 
-    const metCount   = (report?.requirements_check ?? []).filter(r => r.met).length;
+    const metCount = (report?.requirements_check ?? []).filter(r => r.met).length;
     const totalCount = (report?.requirements_check ?? []).length;
 
     return (
@@ -209,7 +304,10 @@ export default function TaskViewPage() {
         <div className="p-6 space-y-4">
           {/* Header */}
           <div className="flex items-center gap-3">
-            <Link href="/my-tasks" className="w-8 h-8 rounded-lg border border-base-300 flex items-center justify-center hover:bg-base-200 transition-colors">
+            <Link
+              href="/my-tasks"
+              className="w-8 h-8 rounded-lg border border-base-300 flex items-center justify-center hover:bg-base-200 transition-colors"
+            >
               <ArrowLeftIcon className="w-4 h-4 text-base-content/60" />
             </Link>
             <div>
@@ -228,7 +326,6 @@ export default function TaskViewPage() {
 
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-4">
-
               {/* Evaluating */}
               {isEvaluating && (
                 <div className="bg-base-100 rounded-2xl border border-base-200 p-12 flex flex-col items-center text-center">
@@ -257,19 +354,33 @@ export default function TaskViewPage() {
                   {/* Verdict banner */}
                   {recStyle && (
                     <div className={`rounded-2xl border ${recStyle.bg} ${recStyle.border} p-5 flex items-center gap-4`}>
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shrink-0 ${recStyle.bg} border ${recStyle.border} ${recStyle.text}`}>
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shrink-0 ${recStyle.bg} border ${recStyle.border} ${recStyle.text}`}
+                      >
                         {recStyle.icon}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`font-bold text-lg ${recStyle.text}`}>{recStyle.label}</p>
                         <p className="text-xs text-base-content/50 mt-0.5">
                           Confidence: <span className={`font-semibold ${confColor}`}>{report.confidence_score}%</span>
-                          {totalCount > 0 && <span className="ml-3">Requirements: <span className="font-semibold text-base-content">{metCount}/{totalCount} met</span></span>}
+                          {totalCount > 0 && (
+                            <span className="ml-3">
+                              Requirements:{" "}
+                              <span className="font-semibold text-base-content">
+                                {metCount}/{totalCount} met
+                              </span>
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">Complexity</p>
-                        <p className="text-2xl font-bold text-base-content">{report.task_complexity}<span className="text-sm font-normal text-base-content/40">/1000</span></p>
+                        <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">
+                          Complexity
+                        </p>
+                        <p className="text-2xl font-bold text-base-content">
+                          {report.task_complexity}
+                          <span className="text-sm font-normal text-base-content/40">/1000</span>
+                        </p>
                       </div>
                     </div>
                   )}
@@ -281,12 +392,25 @@ export default function TaskViewPage() {
                       <div className="flex gap-4 flex-wrap">
                         {(report.files_submitted ?? []).length > 0 && (
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-success mb-2">Submitted ({report.files_submitted.length})</p>
+                            <p className="text-xs font-semibold text-success mb-2">
+                              Submitted ({report.files_submitted.length})
+                            </p>
                             <div className="space-y-1">
                               {report.files_submitted.map(f => (
-                                <div key={f} className="flex items-center gap-2 bg-success/5 border border-success/20 rounded-lg px-3 py-1.5">
+                                <div
+                                  key={f}
+                                  className="flex items-center gap-2 bg-success/5 border border-success/20 rounded-lg px-3 py-1.5"
+                                >
                                   <span className="text-success text-xs">✓</span>
-                                  <span className="font-mono text-xs text-base-content/80 truncate">{f}</span>
+                                  <span className="font-mono text-xs text-base-content/80 truncate flex-1">{f}</span>
+                                  <a
+                                    href={`${backendUrl}/files/${id}/${encodeURIComponent(f)}`}
+                                    download={f}
+                                    className="btn btn-ghost btn-xs btn-square shrink-0"
+                                    title={`Download ${f}`}
+                                  >
+                                    <ArrowDownTrayIcon className="w-3.5 h-3.5 text-base-content/50" />
+                                  </a>
                                 </div>
                               ))}
                             </div>
@@ -294,14 +418,19 @@ export default function TaskViewPage() {
                         )}
                         {(report.files_missing ?? []).length > 0 && (
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-error mb-2">Missing ({report.files_missing.length})</p>
+                            <p className="text-xs font-semibold text-error mb-2">
+                              Missing ({report.files_missing.length})
+                            </p>
                             <div className="space-y-1">
                               {report.files_missing.map(f => (
-                                <div key={f} className="flex items-center gap-2 bg-error/5 border border-error/20 rounded-lg px-3 py-1.5">
+                                <div
+                                  key={f}
+                                  className="flex items-center gap-2 bg-error/5 border border-error/20 rounded-lg px-3 py-1.5"
+                                >
                                   <span className="text-error text-xs">✗</span>
                                   <span className="font-mono text-xs text-base-content/80 truncate">{f}</span>
                                 </div>
-                          ))}
+                              ))}
                             </div>
                           </div>
                         )}
@@ -316,10 +445,15 @@ export default function TaskViewPage() {
                       <p className={`text-2xl font-bold ${confColor}`}>{report.confidence_score}%</p>
                     </div>
                     <div className="w-full bg-base-200 rounded-full h-2.5">
-                      <div className={`h-2.5 rounded-full transition-all duration-700 ${confBarColor}`} style={{ width: `${report.confidence_score}%` }} />
+                      <div
+                        className={`h-2.5 rounded-full transition-all duration-700 ${confBarColor}`}
+                        style={{ width: `${report.confidence_score}%` }}
+                      />
                     </div>
                     <div className="flex justify-between text-[10px] text-base-content/30 mt-1.5">
-                      <span>Empty / Dangerous</span><span>Acceptable</span><span>Production Ready</span>
+                      <span>Empty / Dangerous</span>
+                      <span>Acceptable</span>
+                      <span>Production Ready</span>
                     </div>
                   </div>
 
@@ -328,20 +462,31 @@ export default function TaskViewPage() {
                     <div className="bg-base-100 rounded-2xl border border-base-200 p-6">
                       <div className="flex items-center justify-between mb-4">
                         <h2 className="font-bold text-base-content">Task Requirements</h2>
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${metCount === totalCount ? "bg-success/15 text-success" : metCount === 0 ? "bg-error/15 text-error" : "bg-warning/15 text-warning"}`}>
+                        <span
+                          className={`text-xs font-bold px-2.5 py-1 rounded-full ${metCount === totalCount ? "bg-success/15 text-success" : metCount === 0 ? "bg-error/15 text-error" : "bg-warning/15 text-warning"}`}
+                        >
                           {metCount}/{totalCount} met
                         </span>
                       </div>
                       <div className="space-y-2">
                         {report.requirements_check.map((req, i) => (
-                          <div key={i} className={`rounded-xl p-4 border ${req.met ? "bg-success/5 border-success/20" : "bg-error/5 border-error/20"}`}>
+                          <div
+                            key={i}
+                            className={`rounded-xl p-4 border ${req.met ? "bg-success/5 border-success/20" : "bg-error/5 border-error/20"}`}
+                          >
                             <div className="flex items-start gap-3">
-                              <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold ${req.met ? "bg-success text-success-content" : "bg-error text-error-content"}`}>
+                              <div
+                                className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold ${req.met ? "bg-success text-success-content" : "bg-error text-error-content"}`}
+                              >
                                 {req.met ? "✓" : "✗"}
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-semibold text-base-content">{req.requirement}</p>
-                                <p className={`text-xs mt-1 leading-relaxed ${req.met ? "text-base-content/60" : "text-error/80"}`}>{req.detail}</p>
+                                <p
+                                  className={`text-xs mt-1 leading-relaxed ${req.met ? "text-base-content/60" : "text-error/80"}`}
+                                >
+                                  {req.detail}
+                                </p>
                               </div>
                             </div>
                           </div>
@@ -356,7 +501,7 @@ export default function TaskViewPage() {
                       <div className="flex items-center justify-between mb-4">
                         <h2 className="font-bold text-base-content">Code Issues</h2>
                         <div className="flex gap-1.5">
-                          {["critical","high","medium","low"].map(sev => {
+                          {["critical", "high", "medium", "low"].map(sev => {
                             const count = report.code_issues.filter(i => i.severity === sev).length;
                             if (!count) return null;
                             const s = sevStyle(sev);
@@ -377,7 +522,9 @@ export default function TaskViewPage() {
                               <div className="flex items-center gap-0 bg-base-200">
                                 <div className={`w-1 self-stretch ${s.bar}`} />
                                 <div className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0">
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${s.badge}`}>
+                                  <span
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${s.badge}`}
+                                  >
                                     {issue.severity}
                                   </span>
                                   <p className="text-sm font-semibold text-base-content truncate">{issue.issue}</p>
@@ -405,6 +552,37 @@ export default function TaskViewPage() {
                             </div>
                           );
                         })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Submission files — fetched directly from backend */}
+                  {submittedFiles.length > 0 && (
+                    <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
+                      <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
+                        Submission Files
+                      </p>
+                      <div className="space-y-2">
+                        {submittedFiles.map(f => (
+                          <div
+                            key={f.filename}
+                            className="flex items-center gap-3 border border-base-200 rounded-xl px-4 py-3"
+                          >
+                            <CodeBracketIcon className="w-4 h-4 text-primary shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-mono text-xs text-base-content/80 truncate">{f.filename}</p>
+                              <p className="text-[10px] text-base-content/40 mt-0.5">{(f.size / 1024).toFixed(1)} KB</p>
+                            </div>
+                            <a
+                              href={`${backendUrl}/files/${id}/${encodeURIComponent(f.filename)}`}
+                              download={f.filename}
+                              className="btn btn-ghost btn-xs btn-square shrink-0"
+                              title={`Download ${f.filename}`}
+                            >
+                              <ArrowDownTrayIcon className="w-4 h-4 text-base-content/50" />
+                            </a>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -450,30 +628,79 @@ export default function TaskViewPage() {
 
               {isDone && (
                 <>
-                  <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
-                    <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">What Happens Next</p>
-                    <div className="space-y-3">
-                      {[
-                        { step: "1", text: "Client reviews this AI report" },
-                        { step: "2", text: "Client approves, rejects, or escalates to DAO" },
-                        { step: "3", text: "Escrow released on approval" },
-                      ].map(({ step, text }) => (
-                        <div key={step} className="flex items-start gap-2.5">
-                          <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                            <span className="text-[10px] font-bold text-primary">{step}</span>
-                          </div>
-                          <p className="text-xs text-base-content/60 leading-relaxed">{text}</p>
-                        </div>
-                      ))}
+                  {isClient ? (
+                    /* Client: Review Actions */
+                    <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
+                      <h2 className="text-xs font-bold tracking-widest text-base-content/60 uppercase mb-4">
+                        Review Actions
+                      </h2>
+                      <div className="space-y-2">
+                        <button
+                          className="btn btn-primary w-full gap-2 h-14 text-sm"
+                          onClick={handleApprove}
+                          disabled={approveLoading || approved}
+                        >
+                          {approveLoading ? (
+                            <><span className="loading loading-spinner loading-xs" /> Processing…</>
+                          ) : approved ? (
+                            <><CheckCircleIcon className="w-5 h-5" /> Payment Released</>
+                          ) : (
+                            <><CurrencyDollarIcon className="w-5 h-5" /> Approve &amp; Release Payment</>
+                          )}
+                        </button>
+                        <button className="btn btn-outline w-full gap-2">
+                          <ArrowPathIcon className="w-4 h-4" />
+                          Request Changes
+                        </button>
+                        <button className="btn w-full gap-2 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300">
+                          <ExclamationTriangleIcon className="w-4 h-4" />
+                          Open Dispute
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-base-content/40 leading-relaxed mt-3 text-center">
+                        Only use Dispute if direct communication fails.
+                      </p>
                     </div>
-                  </div>
+                  ) : (
+                    /* Freelancer: What Happens Next + View Results */
+                    <div className="bg-base-100 rounded-2xl border border-base-200 p-5 space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
+                          What Happens Next
+                        </p>
+                        <div className="space-y-3">
+                          {[
+                            { step: "1", text: "Client reviews this AI report" },
+                            { step: "2", text: "Client approves, rejects, or escalates to DAO" },
+                            { step: "3", text: "Escrow released on approval" },
+                          ].map(({ step, text }) => (
+                            <div key={step} className="flex items-start gap-2.5">
+                              <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-[10px] font-bold text-primary">{step}</span>
+                              </div>
+                              <p className="text-xs text-base-content/60 leading-relaxed">{text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        onClick={goToFreelancerResults}
+                        className="btn btn-outline btn-sm w-full gap-2"
+                      >
+                        <CheckCircleIcon className="w-4 h-4" />
+                        View My Evaluation Results
+                      </button>
+                    </div>
+                  )}
 
                   {/* Issue count summary */}
                   {(report?.code_issues ?? []).length > 0 && (
                     <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
-                      <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Issues by Severity</p>
+                      <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
+                        Issues by Severity
+                      </p>
                       <div className="space-y-2">
-                        {["critical","high","medium","low"].map(sev => {
+                        {["critical", "high", "medium", "low"].map(sev => {
                           const count = (report?.code_issues ?? []).filter(i => i.severity === sev).length;
                           if (!count) return null;
                           const s = sevStyle(sev);
@@ -502,6 +729,209 @@ export default function TaskViewPage() {
             </div>
           </div>
         </div>
+
+        {/* removed modal — results are now at /my-tasks/[id]/results */}
+        {false && (
+          <div>
+            <div className="bg-base-100 rounded-3xl border border-base-200 shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+
+              {isClient ? (
+                /* ── CLIENT VIEW ── */
+                <>
+                  {/* Header */}
+                  <div className="p-6 border-b border-base-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-success/15 flex items-center justify-center">
+                        <CheckCircleIcon className="w-6 h-6 text-success" />
+                      </div>
+                      <div>
+                        <h2 className="font-bold text-base-content text-lg">Payment Released!</h2>
+                        <p className="text-xs text-base-content/50">Escrow funds sent to freelancer wallet</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowResultModal(false)} className="btn btn-ghost btn-sm btn-square text-base-content/40">✕</button>
+                  </div>
+
+                  {/* Submitted files */}
+                  <div className="p-6 border-b border-base-200">
+                    <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
+                      Submitted Files
+                    </p>
+                    {submittedFiles.length === 0 ? (
+                      <p className="text-xs text-base-content/40 italic">Files were removed after payment release.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {submittedFiles.map(f => (
+                          <div key={f.filename} className="flex items-center gap-3 border border-base-200 rounded-xl px-4 py-3">
+                            <CodeBracketIcon className="w-4 h-4 text-primary shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-mono text-xs text-base-content/80 truncate">{f.filename}</p>
+                              <p className="text-[10px] text-base-content/40 mt-0.5">{(f.size / 1024).toFixed(1)} KB</p>
+                            </div>
+                            <a
+                              href={`${backendUrl}/files/${id}/${encodeURIComponent(f.filename)}`}
+                              download={f.filename}
+                              className="btn btn-ghost btn-xs btn-square shrink-0"
+                              title={`Download ${f.filename}`}
+                            >
+                              <ArrowDownTrayIcon className="w-4 h-4 text-base-content/50" />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Freelancer gains applied */}
+                  {approveResult && (
+                    <div className="p-6">
+                      <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
+                        Freelancer Gains Applied
+                      </p>
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-success/8 border border-success/20 rounded-2xl p-4 text-center">
+                          <p className="text-2xl font-bold text-success">+{approveResult.reputation_delta}</p>
+                          <p className="text-[10px] text-base-content/50 mt-1 uppercase tracking-wider">Reputation</p>
+                        </div>
+                        <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4 text-center">
+                          <p className="text-2xl font-bold text-primary">+{approveResult.elo.elo_delta}</p>
+                          <p className="text-[10px] text-base-content/50 mt-1 uppercase tracking-wider">ELO</p>
+                        </div>
+                      </div>
+                      {approveResult.elo.tier_changed && (
+                        <div className="bg-warning/10 border border-warning/20 rounded-xl px-4 py-3 flex items-center gap-2 mb-3">
+                          <span className="text-warning text-base">★</span>
+                          <p className="text-xs font-semibold text-warning">
+                            Tier up! {approveResult.elo.old_tier} → {approveResult.elo.new_tier}
+                          </p>
+                        </div>
+                      )}
+                      {Object.keys(approveResult.skill_changes).length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-2">Skills Updated</p>
+                          <div className="space-y-1.5">
+                            {Object.entries(approveResult.skill_changes).map(([skill, level]) => (
+                              <div key={skill} className="flex items-center justify-between text-xs">
+                                <span className="text-base-content/70 capitalize">{skill}</span>
+                                <span className="font-bold text-primary">{level.toFixed(1)}<span className="text-base-content/40 font-normal">/10</span></span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* ── FREELANCER VIEW ── */
+                <>
+                  {/* Header */}
+                  <div className="p-6 border-b border-base-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center">
+                        <ShieldCheckIcon className="w-6 h-6 text-primary" />
+                      </div>
+                      <div>
+                        <h2 className="font-bold text-base-content text-lg">Your Evaluation Results</h2>
+                        <p className="text-xs text-base-content/50">
+                          {approveResult ? "Approved — gains applied" : "Pending client decision"}
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowResultModal(false)} className="btn btn-ghost btn-sm btn-square text-base-content/40">✕</button>
+                  </div>
+
+                  {/* Rank / ELO gained */}
+                  <div className="p-6 border-b border-base-200">
+                    <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
+                      {approveResult ? "Gains Applied" : "Estimated Gains on Approval"}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-success/8 border border-success/20 rounded-2xl p-4 text-center">
+                        <p className="text-2xl font-bold text-success">
+                          +{approveResult?.reputation_delta ?? report?.suggested_reputation_delta ?? "—"}
+                        </p>
+                        <p className="text-[10px] text-base-content/50 mt-1 uppercase tracking-wider">Reputation</p>
+                      </div>
+                      <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4 text-center">
+                        <p className="text-2xl font-bold text-primary">
+                          +{approveResult?.elo.elo_delta ?? "~?"}
+                        </p>
+                        <p className="text-[10px] text-base-content/50 mt-1 uppercase tracking-wider">ELO</p>
+                      </div>
+                    </div>
+                    {approveResult?.elo.tier_changed && (
+                      <div className="bg-warning/10 border border-warning/20 rounded-xl px-4 py-3 flex items-center gap-2 mt-3">
+                        <span className="text-warning text-base">★</span>
+                        <p className="text-xs font-semibold text-warning">
+                          Tier up! {approveResult.elo.old_tier} → {approveResult.elo.new_tier}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Skills improved */}
+                  {(() => {
+                    const skills = approveResult
+                      ? approveResult.skill_changes
+                      : report?.suggested_skills
+                        ? Object.fromEntries(Object.entries(report.suggested_skills).map(([k, v]) => [k, v.new_level]))
+                        : {};
+                    const entries = Object.entries(skills);
+                    if (!entries.length) return null;
+                    return (
+                      <div className="p-6 border-b border-base-200">
+                        <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
+                          Skills {approveResult ? "Updated" : "Suggested"}
+                        </p>
+                        <div className="space-y-3">
+                          {entries.map(([skill, level]) => (
+                            <div key={skill}>
+                              <div className="flex items-center justify-between text-xs mb-1">
+                                <span className="text-base-content/70 capitalize font-medium">{skill}</span>
+                                <span className="font-bold text-primary">{(level as number).toFixed(1)}<span className="text-base-content/40 font-normal">/10</span></span>
+                              </div>
+                              <div className="w-full bg-base-200 rounded-full h-1.5">
+                                <div
+                                  className="h-1.5 rounded-full bg-primary transition-all duration-700"
+                                  style={{ width: `${((level as number) / 10) * 100}%` }}
+                                />
+                              </div>
+                              {!approveResult && report?.suggested_skills?.[skill]?.reasoning && (
+                                <p className="text-[10px] text-base-content/40 mt-1 leading-relaxed">
+                                  {report.suggested_skills[skill].reasoning}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Payment */}
+                  <div className="p-6">
+                    <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Payment</p>
+                    {approveResult ? (
+                      <div className="bg-success/8 border border-success/20 rounded-2xl p-4 flex items-center gap-3">
+                        <CheckCircleIcon className="w-6 h-6 text-success shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-success">Escrow released to your wallet</p>
+                          <p className="text-xs text-base-content/50 mt-0.5">Check your connected wallet for the NXR transfer.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-base-200 rounded-2xl p-4 flex items-center gap-3">
+                        <ClockIcon className="w-5 h-5 text-base-content/40 shrink-0" />
+                        <p className="text-xs text-base-content/60">Payment will be released to your wallet once the client approves.</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </AppLayout>
     );
   }
