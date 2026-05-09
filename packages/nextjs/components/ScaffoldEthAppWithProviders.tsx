@@ -11,6 +11,7 @@ import { WagmiProvider } from "wagmi";
 import { Footer } from "~~/components/Footer";
 import { Header } from "~~/components/Header";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
+import { XmtpProvider } from "~~/components/decentrawork/XmtpProvider";
 import { wagmiConfig } from "~~/services/web3/wagmiConfig";
 
 const SHELL_FREE_ROUTES = ["/setup"];
@@ -56,7 +57,9 @@ export const ScaffoldEthAppWithProviders = ({ children }: { children: React.Reac
           theme={mounted ? (isDarkMode ? darkTheme() : lightTheme()) : lightTheme()}
         >
           <ProgressBar height="3px" color="#2299dd" />
-          <ScaffoldEthApp>{children}</ScaffoldEthApp>
+          <XmtpProvider>
+            <ScaffoldEthApp>{children}</ScaffoldEthApp>
+          </XmtpProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
