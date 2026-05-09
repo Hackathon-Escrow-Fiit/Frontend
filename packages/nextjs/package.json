@@ -5,12 +5,12 @@
   "scripts": {
     "build": "next build",
     "check-types": "tsc --noEmit --incremental",
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "format": "prettier --write . '!(node_modules|.next|contracts)/**/*'",
     "ipfs": "NEXT_PUBLIC_IPFS_BUILD=true yarn build && yarn bgipfs upload config init -u https://upload.bgipfs.com && CID=$(yarn bgipfs upload out | grep -o 'CID: [^ ]*' | cut -d' ' -f2) && [ ! -z \"$CID\" ] && echo '🚀 Upload complete! Your site is now available at: https://community.bgipfs.com/ipfs/'$CID || echo '❌ Upload failed'",
     "lint": "next lint",
     "serve": "next start",
-    "start": "next dev --turbopack",
+    "start": "next dev",
     "vercel": "vercel --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=false --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env VERCEL_TELEMETRY_DISABLED=1",
     "vercel:login": "vercel login",
     "vercel:yolo": "vercel --build-env YARN_ENABLE_IMMUTABLE_INSTALLS=false --build-env ENABLE_EXPERIMENTAL_COREPACK=1 --build-env NEXT_PUBLIC_IGNORE_BUILD_ERROR=true --build-env VERCEL_TELEMETRY_DISABLED=1"
@@ -23,6 +23,8 @@
     "@scaffold-ui/debug-contracts": "^0.1.9",
     "@scaffold-ui/hooks": "^0.1.8",
     "@tanstack/react-query": "~5.59.15",
+    "@xmtp/browser-sdk": "^7.0.0",
+    "@xmtp/content-type-remote-attachment": "^2.0.4",
     "blo": "~1.2.0",
     "burner-connector": "0.0.20",
     "daisyui": "5.0.9",
