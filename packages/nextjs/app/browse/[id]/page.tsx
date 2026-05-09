@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatEther, parseEther } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContracts } from "wagmi";
 import {
   ArrowLeftIcon,
   BoltIcon,
@@ -16,7 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as CheckCircleSolid } from "@heroicons/react/24/solid";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
-import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { notification } from "~~/utils/scaffold-eth";
 
 const shortenAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -33,6 +33,13 @@ const COMPLEXITY_LABEL = (budgetWei: bigint) => {
   return "Expert";
 };
 
+type OnChainBid = {
+  freelancer: `0x${string}`;
+  amount: bigint;
+  proposal: string;
+  accepted: boolean;
+};
+
 export default function BrowseTaskPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -42,6 +49,7 @@ export default function BrowseTaskPage() {
   const [proposal, setProposal] = useState("");
   const [saved, setSaved] = useState(false);
   const [role, setRole] = useState<"client" | "freelancer" | null>(null);
+  const [acceptingIndex, setAcceptingIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("dw_role");
@@ -61,9 +69,43 @@ export default function BrowseTaskPage() {
     query: { enabled: jobId > 0n },
   });
 
+  const bidCount = job ? Number(job.bidCount) : 0;
+  const isOwner = isClient && !!address && !!job && address.toLowerCase() === job.client.toLowerCase();
+  const isOpen = job ? Number(job.status) === 0 : false;
+
+  // ── Batch-read all bids (owner only) ─────────────────────────────────────
+
+  const { data: contractInfo } = useDeployedContractInfo({ contractName: "JobMarketplace" });
+
+  const bidCalls = useMemo(() => {
+    if (!contractInfo || bidCount === 0 || !isOwner) return [];
+    return Array.from({ length: bidCount }, (_, i) => ({
+      address: contractInfo.address as `0x${string}`,
+      abi: contractInfo.abi,
+      functionName: "getBid" as const,
+      args: [jobId, BigInt(i)] as const,
+    }));
+  }, [contractInfo, bidCount, isOwner, jobId]);
+
+  const { data: bidResults, refetch: refetchBids } = useReadContracts({
+    contracts: bidCalls,
+    query: { enabled: bidCalls.length > 0 },
+  });
+
+  const bids = useMemo<(OnChainBid & { index: number })[]>(() => {
+    if (!bidResults) return [];
+    return bidResults
+      .filter(r => r.status === "success" && r.result != null)
+      .map((r, i) => ({ ...(r.result as unknown as OnChainBid), index: i }));
+  }, [bidResults]);
+
   // ── Place bid ─────────────────────────────────────────────────────────────
 
   const { writeContractAsync: placeBid, isPending: isBidding } = useScaffoldWriteContract({
+    contractName: "JobMarketplace",
+  });
+
+  const { writeContractAsync: acceptBidWrite, isPending: isAccepting } = useScaffoldWriteContract({
     contractName: "JobMarketplace",
   });
 
@@ -89,6 +131,23 @@ export default function BrowseTaskPage() {
     } catch (e) {
       notification.error("Failed to submit bid");
       console.error(e);
+    }
+  };
+
+  const handleAccept = async (bidIndex: number) => {
+    setAcceptingIndex(bidIndex);
+    try {
+      await acceptBidWrite({
+        functionName: "acceptBid",
+        args: [jobId, BigInt(bidIndex)],
+      });
+      notification.success("Bid accepted — freelancer has been assigned!");
+      refetchBids();
+    } catch (e) {
+      notification.error("Failed to accept bid");
+      console.error(e);
+    } finally {
+      setAcceptingIndex(null);
     }
   };
 
@@ -119,9 +178,6 @@ export default function BrowseTaskPage() {
   }
 
   const budgetDwt = Number(formatEther(job.budget)).toLocaleString(undefined, { maximumFractionDigits: 2 });
-  const isOwner = isClient && address?.toLowerCase() === job.client.toLowerCase();
-  const isOpen = Number(job.status) === 0;
-  const bidCount = Number(job.bidCount);
   const pitchLeft = 500 - proposal.length;
 
   return (
@@ -162,6 +218,86 @@ export default function BrowseTaskPage() {
               </div>
               <p className="text-sm text-base-content/70 leading-relaxed whitespace-pre-wrap">{job.description}</p>
             </div>
+
+            {/* Applications — client/owner only */}
+            {isOwner && (
+              <div className="bg-base-100 rounded-2xl border border-base-200 p-6">
+                <div className="flex items-center gap-2 mb-5">
+                  <UserGroupIcon className="w-5 h-5 text-primary" />
+                  <h2 className="text-lg font-bold text-base-content">Applications</h2>
+                  <span className="bg-primary/10 text-primary text-xs font-semibold px-3 py-1 rounded-full ml-auto">
+                    {bidCount} received
+                  </span>
+                </div>
+
+                {bidCount === 0 ? (
+                  <p className="text-sm text-base-content/40 py-4 text-center">No applications yet.</p>
+                ) : !bidResults ? (
+                  <div className="flex items-center gap-2 text-base-content/40 text-sm py-4">
+                    <span className="loading loading-spinner loading-xs" />
+                    Loading applications…
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {bids.map(bid => (
+                      <div
+                        key={bid.index}
+                        className={`border rounded-xl p-4 transition-colors ${
+                          bid.accepted
+                            ? "border-success/40 bg-success/5"
+                            : "border-base-300 hover:border-primary/30"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                              <span className="text-xs font-bold text-primary">
+                                {bid.freelancer.slice(2, 4).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-base-content">{shortenAddr(bid.freelancer)}</p>
+                              <p className="text-[11px] text-base-content/40">Applicant #{bid.index + 1}</p>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold text-primary">
+                              {Number(formatEther(bid.amount)).toLocaleString(undefined, {
+                                maximumFractionDigits: 2,
+                              })}{" "}
+                              NXR
+                            </p>
+                            {bid.accepted && (
+                              <span className="text-[11px] text-success font-semibold flex items-center gap-0.5 justify-end mt-0.5">
+                                <CheckCircleSolid className="w-3 h-3" />
+                                Accepted
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="text-sm text-base-content/70 leading-relaxed mb-3 whitespace-pre-wrap">
+                          {bid.proposal}
+                        </p>
+
+                        {!bid.accepted && isOpen && (
+                          <button
+                            onClick={() => handleAccept(bid.index)}
+                            disabled={isAccepting || acceptingIndex !== null}
+                            className="btn btn-primary btn-sm w-full"
+                          >
+                            {acceptingIndex === bid.index ? (
+                              <span className="loading loading-spinner loading-xs" />
+                            ) : null}
+                            {acceptingIndex === bid.index ? "Accepting…" : "Accept This Bid"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Bid form — freelancers only, job must be open, not the owner */}
             {!isClient && !isOwner && isOpen && (
@@ -226,13 +362,6 @@ export default function BrowseTaskPage() {
                 {!address && (
                   <p className="text-xs text-center text-base-content/40 mt-2">Connect your wallet to submit a bid</p>
                 )}
-              </div>
-            )}
-
-            {isOwner && (
-              <div className="alert alert-info text-sm">
-                <CheckCircleSolid className="w-4 h-4 shrink-0" />
-                This is your job posting.
               </div>
             )}
           </div>
@@ -303,7 +432,7 @@ export default function BrowseTaskPage() {
                   Required Skills
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {job.skills.map(tag => (
+                  {job.skills.map((tag: string) => (
                     <span
                       key={tag}
                       className="text-xs border border-base-300 text-base-content/70 px-2.5 py-1 rounded-full"
