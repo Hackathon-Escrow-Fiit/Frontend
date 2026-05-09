@@ -18,6 +18,7 @@ contract ReputationSystem is AccessControl {
     mapping(address => uint256) public reputation;
     mapping(address => bool)    public initialized;
     mapping(address => bool)    public hasCompletedJob;
+    mapping(address => uint256) public tasksCompleted;
 
     mapping(address => mapping(string => uint8)) public skills;
 
@@ -26,6 +27,7 @@ contract ReputationSystem is AccessControl {
 
     event ReputationInitialized(address indexed user, uint256 base);
     event ReputationUpdated(address indexed user, int256 delta, uint256 newReputation);
+    event TasksCompletedIncremented(address indexed user, uint256 newCount);
     event SkillUpdated(address indexed user, string skill, uint8 score, uint256 jobId);
     event ClientRated(address indexed client, uint8 stars, uint256 jobId);
     event FreelancerRated(address indexed freelancer, uint8 stars, uint256 jobId);
@@ -48,7 +50,9 @@ contract ReputationSystem is AccessControl {
         external
     {
         require(
-            hasRole(MARKETPLACE_ROLE, msg.sender) || hasRole(DAO_ROLE, msg.sender),
+            hasRole(MARKETPLACE_ROLE, msg.sender) ||
+            hasRole(DAO_ROLE, msg.sender) ||
+            hasRole(AI_ORACLE_ROLE, msg.sender),
             "AccessControl: caller lacks required role"
         );
         uint256 current = reputation[user];
@@ -59,6 +63,20 @@ contract ReputationSystem is AccessControl {
             reputation[user] = current + uint256(delta);
         }
         emit ReputationUpdated(user, delta, reputation[user]);
+    }
+
+    function incrementTasksCompleted(address user) external {
+        require(
+            hasRole(AI_ORACLE_ROLE, msg.sender) || hasRole(MARKETPLACE_ROLE, msg.sender),
+            "AccessControl: caller lacks required role"
+        );
+        tasksCompleted[user] += 1;
+        hasCompletedJob[user] = true;
+        emit TasksCompletedIncremented(user, tasksCompleted[user]);
+    }
+
+    function getTasksCompleted(address user) external view returns (uint256) {
+        return tasksCompleted[user];
     }
 
     function rateFreelancer(address freelancer, uint8 stars, uint256 jobId)
