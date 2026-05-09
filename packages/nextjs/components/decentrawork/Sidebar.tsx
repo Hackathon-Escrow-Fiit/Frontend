@@ -11,6 +11,7 @@ import {
   QuestionMarkCircleIcon,
   ShieldExclamationIcon,
   Squares2X2Icon,
+  UserCircleIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
 import { useDecentraWorkRegistry } from "~~/hooks/scaffold-eth";
@@ -27,6 +28,7 @@ const mainNav: NavItem[] = [
   { label: "My Tasks", href: "/my-tasks", Icon: ClipboardDocumentListIcon },
   { label: "Disputes", href: "/disputes", Icon: ShieldExclamationIcon },
   { label: "Wallet", href: "/wallet", Icon: WalletIcon },
+  { label: "Profile", href: "/profile", Icon: UserCircleIcon },
 ];
 
 const bottomNav: NavItem[] = [
