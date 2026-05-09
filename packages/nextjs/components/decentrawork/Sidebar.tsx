@@ -54,7 +54,11 @@ export const Sidebar = () => {
   const pathname = usePathname();
   const { address } = useAccount();
   const { currentName } = useDecentraWorkRegistry();
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const isActive = (href: string) => {
+    if (pathname === href || pathname.startsWith(href + "/")) return true;
+    if (href === "/dashboard" && pathname.startsWith("/browse")) return true;
+    return false;
+  };
 
   return (
     <aside className="w-52 shrink-0 bg-base-100 border-r border-base-300 flex flex-col h-full">

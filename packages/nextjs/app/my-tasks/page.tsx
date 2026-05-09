@@ -83,7 +83,7 @@ const MyTasksPage = () => {
 
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto px-6 py-8 w-full">
+      <div className="px-6 py-8 w-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -147,11 +147,7 @@ const TaskCard = ({ task }: { task: Task }) => (
     className="bg-base-100 border border-base-300 rounded-2xl px-5 py-4 flex items-center gap-4 hover:border-primary/40 hover:shadow-sm transition-all group"
   >
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img
-      src={blo(task.counterpart.address)}
-      alt={task.counterpart.name}
-      className="w-10 h-10 rounded-full shrink-0"
-    />
+    <img src={blo(task.counterpart.address)} alt={task.counterpart.name} className="w-10 h-10 rounded-full shrink-0" />
 
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2 mb-1">

@@ -27,6 +27,7 @@ const SetupPage: NextPage = () => {
     if (!canSubmit) return;
     try {
       await register(ensHandle);
+      if (role) localStorage.setItem("dw_role", role);
       notification.success(`Registered ${ensHandle}.decentrawork.eth!`);
       router.push("/dashboard");
     } catch {
