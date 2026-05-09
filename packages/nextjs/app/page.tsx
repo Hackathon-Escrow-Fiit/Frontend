@@ -1,73 +1,76 @@
 "use client";
 
-import Link from "next/link";
-import { Address } from "@scaffold-ui/components";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import type { NextPage } from "next";
 import { useAccount } from "wagmi";
-import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { useTargetNetwork } from "~~/hooks/scaffold-eth";
+import { useDecentraWorkRegistry } from "~~/hooks/scaffold-eth";
 
 const Home: NextPage = () => {
-  const { address: connectedAddress } = useAccount();
-  const { targetNetwork } = useTargetNetwork();
+  const router = useRouter();
+  const { address, isConnected } = useAccount();
+  const { currentName } = useDecentraWorkRegistry();
+
+  useEffect(() => {
+    if (!isConnected || !address) return;
+    if (currentName) {
+      router.push("/messages");
+    } else {
+      router.push("/setup");
+    }
+  }, [isConnected, address, currentName, router]);
 
   return (
-    <>
-      <div className="flex items-center flex-col grow pt-10">
-        <div className="px-5">
-          <h1 className="text-center">
-            <span className="block text-2xl mb-2">Welcome to</span>
-            <span className="block text-4xl font-bold">Scaffold-ETH 2</span>
-          </h1>
-          <div className="flex justify-center items-center space-x-2 flex-col">
-            <p className="my-2 font-medium">Connected Address:</p>
-            <Address address={connectedAddress} chain={targetNetwork} />
+    <div className="min-h-screen flex flex-col bg-base-200">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+        <div className="mb-6">
+          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
+            <svg
+              className="w-8 h-8 text-primary-content"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z"
+              />
+            </svg>
           </div>
-
-          <p className="text-center text-lg">
-            Get started by editing{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/nextjs/app/page.tsx
-            </code>
-          </p>
-          <p className="text-center text-lg">
-            Edit your smart contract{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              YourContract.sol
-            </code>{" "}
-            in{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/hardhat/contracts
-            </code>
+          <h1 className="text-3xl font-bold text-base-content mb-2">DecentraWork</h1>
+          <p className="text-base-content/60 text-sm max-w-xs mx-auto leading-relaxed">
+            The decentralized freelance marketplace. Verified identities, trustless contracts, on-chain payments.
           </p>
         </div>
 
-        <div className="grow bg-base-300 w-full mt-16 px-8 py-12">
-          <div className="flex justify-center items-center gap-12 flex-col md:flex-row">
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <BugAntIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Tinker with your smart contract using the{" "}
-                <Link href="/debug" passHref className="link">
-                  Debug Contracts
-                </Link>{" "}
-                tab.
-              </p>
-            </div>
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <MagnifyingGlassIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Explore your local transactions with the{" "}
-                <Link href="/blockexplorer" passHref className="link">
-                  Block Explorer
-                </Link>{" "}
-                tab.
-              </p>
-            </div>
-          </div>
+        <div className="bg-base-100 rounded-2xl shadow-md p-6 w-full max-w-xs">
+          <p className="text-xs font-bold tracking-widest text-base-content/50 uppercase mb-4">Connect to continue</p>
+          <ConnectButton.Custom>
+            {({ account, chain, openConnectModal, mounted }) => {
+              const connected = mounted && account && chain;
+              return connected ? (
+                <div className="flex flex-col items-center gap-2">
+                  <span className="loading loading-spinner loading-sm text-primary" />
+                  <p className="text-xs text-base-content/50">Loading your profile…</p>
+                </div>
+              ) : (
+                <button onClick={openConnectModal} className="btn btn-primary w-full">
+                  Connect Wallet
+                </button>
+              );
+            }}
+          </ConnectButton.Custom>
         </div>
+
+        <p className="text-xs text-base-content/40 mt-6">
+          New here? <span className="text-primary">Connect your wallet</span> — we&apos;ll set up your identity in
+          seconds.
+        </p>
       </div>
-    </>
+    </div>
   );
 };
 
