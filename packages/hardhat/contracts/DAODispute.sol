@@ -44,6 +44,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         uint256 againstWeight;   // votes AGAINST (full pay)
         uint256 voterCount;
         bool    finalized;
+        string  defenseStatement;
     }
 
     IJobMarketplace   public jobMarketplace;
@@ -68,6 +69,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
     event DisputeFinalized(uint256 indexed jobId, uint8 outcome, uint256 forWeight, uint256 againstWeight);
     event VoterRewarded(uint256 indexed jobId, address indexed voter, uint256 amount);
     event VoterPenalized(uint256 indexed jobId, address indexed voter, int256 delta);
+    event DefenseSubmitted(uint256 indexed jobId, address indexed freelancer, string statement);
 
     error AlreadyFinalized();
     error VotingNotOver();
@@ -77,6 +79,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
     error AlreadyVoted();
     error DisputeNotFound();
     error DisputeAlreadyExists();
+    error NotFreelancer();
 
     constructor(
         address defaultAdmin,
@@ -121,7 +124,8 @@ contract DAODispute is AccessControl, ReentrancyGuard {
             forWeight:          0,
             againstWeight:      0,
             voterCount:         0,
-            finalized:          false
+            finalized:          false,
+            defenseStatement:   ""
         });
 
         emit DisputeInitiated(jobId, client, proposedPaymentBps, stakedTokens);
@@ -152,6 +156,16 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         }
 
         emit VoteCast(jobId, msg.sender, support, weight);
+    }
+
+    function submitDefense(uint256 jobId, string calldata statement) external {
+        Dispute storage d = disputes[jobId];
+        if (d.votingDeadline == 0) revert DisputeNotFound();
+        if (d.finalized) revert AlreadyFinalized();
+        IJobMarketplace.Job memory job = jobMarketplace.getJob(jobId);
+        if (msg.sender != job.freelancer) revert NotFreelancer();
+        d.defenseStatement = statement;
+        emit DefenseSubmitted(jobId, msg.sender, statement);
     }
 
     // Callable by anyone after votingDeadline
@@ -294,7 +308,8 @@ contract DAODispute is AccessControl, ReentrancyGuard {
             uint256 forWeight,
             uint256 againstWeight,
             uint256 voterCount,
-            bool    finalized
+            bool    finalized,
+            string memory defenseStatement
         )
     {
         Dispute storage d = disputes[jobId];
@@ -305,7 +320,8 @@ contract DAODispute is AccessControl, ReentrancyGuard {
             d.forWeight,
             d.againstWeight,
             d.voterCount,
-            d.finalized
+            d.finalized,
+            d.defenseStatement
         );
     }
 
