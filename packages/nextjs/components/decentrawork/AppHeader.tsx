@@ -23,8 +23,11 @@ export const AppHeader = () => (
       ))}
     </nav>
 
-    <button className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0 hover:opacity-90 transition-opacity">
+    <Link
+      href="/profile"
+      className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0 hover:opacity-90 transition-opacity"
+    >
       <UserCircleIcon className="w-5 h-5 text-primary-content" />
-    </button>
+    </Link>
   </header>
 );

@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { blo } from "blo";
 import { useAccount } from "wagmi";
 import {
+  ArrowsRightLeftIcon,
   ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
@@ -28,6 +30,7 @@ const mainNav: NavItem[] = [
   { label: "My Tasks", href: "/my-tasks", Icon: ClipboardDocumentListIcon },
   { label: "Disputes", href: "/disputes", Icon: ShieldExclamationIcon },
   { label: "Wallet", href: "/wallet", Icon: WalletIcon },
+  { label: "Buy NXR", href: "/swap", Icon: ArrowsRightLeftIcon },
   { label: "Profile", href: "/profile", Icon: UserCircleIcon },
 ];
 
@@ -52,8 +55,23 @@ const NavLink = ({ item, active }: { item: NavItem; active: boolean }) => (
 
 export const Sidebar = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const { address } = useAccount();
   const { currentName } = useDecentraWorkRegistry();
+  const [role, setRole] = useState<"client" | "freelancer">("client");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("dw_role");
+    if (stored === "freelancer" || stored === "client") setRole(stored);
+  }, []);
+
+  const toggleRole = () => {
+    const next = role === "client" ? "freelancer" : "client";
+    localStorage.setItem("dw_role", next);
+    setRole(next);
+    router.refresh();
+  };
+
   const isActive = (href: string) => {
     if (pathname === href || pathname.startsWith(href + "/")) return true;
     if (href === "/dashboard" && pathname.startsWith("/browse")) return true;
@@ -85,6 +103,19 @@ export const Sidebar = () => {
         {bottomNav.map(item => (
           <NavLink key={item.href} item={item} active={isActive(item.href)} />
         ))}
+        <button
+          onClick={toggleRole}
+          className="mt-2 w-full flex items-center justify-between px-3 py-2 rounded-lg bg-base-200 hover:bg-base-300 transition-colors"
+        >
+          <span className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">Role</span>
+          <span
+            className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              role === "client" ? "bg-info/15 text-info" : "bg-success/15 text-success"
+            }`}
+          >
+            {role}
+          </span>
+        </button>
       </div>
     </aside>
   );

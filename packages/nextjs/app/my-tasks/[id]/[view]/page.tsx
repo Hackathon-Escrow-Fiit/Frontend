@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
   ArrowPathIcon,
+  ArrowUpTrayIcon,
   BoltIcon,
-  BriefcaseIcon,
   BuildingStorefrontIcon,
   ChatBubbleLeftEllipsisIcon,
   CheckBadgeIcon,
@@ -98,12 +98,64 @@ const DonutChart = ({ score }: { score: number }) => {
 
 export default function TaskViewPage() {
   const { id, view } = useParams<{ id: string; view: string }>();
+  const router = useRouter();
   const [role, setRole] = useState<Role>("client");
+
+  // ── AI report polling (waiting view only) ────────────────────────
+  type CodeIssue = {
+    file: string;
+    line: string;
+    severity: string;
+    issue: string;
+    detail: string;
+    snippet?: string;
+  };
+  type RequirementCheck = {
+    requirement: string;
+    met: boolean;
+    detail: string;
+  };
+  type Report = {
+    status: string;
+    recommendation: string | null;
+    confidence_score: number | null;
+    task_complexity: number | null;
+    detailed_report: string | null;
+    code_issues: CodeIssue[];
+    requirements_check: RequirementCheck[];
+    files_submitted: string[];
+    files_missing: string[];
+  };
+  const [report, setReport] = useState<Report | null>(null);
+  const [reportExpanded, setReportExpanded] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("dw_role");
     if (stored === "freelancer" || stored === "client") setRole(stored as Role);
   }, []);
+
+  useEffect(() => {
+    if (view !== "waiting") return;
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+
+    const fetchReport = async () => {
+      try {
+        const res = await fetch(`${backendUrl}/report/${id}`);
+        if (!res.ok) return;
+        const data: Report = await res.json();
+        setReport(data);
+        return data.status;
+      } catch { return null; }
+    };
+
+    fetchReport(); // immediate first fetch
+    const interval = setInterval(async () => {
+      const status = await fetchReport();
+      if (status && status !== "evaluating") clearInterval(interval);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [view, id]);
 
   const isClient = role === "client";
   const clientViews = ["bids", "active", "review"];
@@ -126,123 +178,326 @@ export default function TaskViewPage() {
 
   /* ── WAITING VIEW ── */
   if (view === "waiting") {
+    const isEvaluating = !report || report.status === "evaluating";
+    const isDone = report && report.status === "pending";
+    const isError = report && report.status === "error";
+
+    const rec = report?.recommendation;
+    const recConfig: Record<string, { bg: string; border: string; text: string; label: string; icon: string }> = {
+      approve:         { bg: "bg-success/10", border: "border-success/30", text: "text-success", label: "AI Recommends Approval", icon: "✓" },
+      reject:          { bg: "bg-error/10",   border: "border-error/30",   text: "text-error",   label: "AI Recommends Rejection", icon: "✗" },
+      escalate_to_dao: { bg: "bg-warning/10", border: "border-warning/30", text: "text-warning", label: "AI: Escalate to DAO",    icon: "⚠" },
+    };
+    const recStyle = rec ? (recConfig[rec] ?? { bg: "bg-base-200", border: "border-base-300", text: "text-base-content", label: rec, icon: "?" }) : null;
+
+    const sevStyle = (s: string) => {
+      if (s === "critical") return { badge: "bg-error text-error-content",   bar: "bg-error",   text: "text-error" };
+      if (s === "high")     return { badge: "bg-warning text-warning-content", bar: "bg-warning", text: "text-warning" };
+      if (s === "medium")   return { badge: "bg-info text-info-content",      bar: "bg-info",    text: "text-info" };
+      return                       { badge: "bg-base-300 text-base-content",  bar: "bg-base-300", text: "text-base-content/60" };
+    };
+
+    const conf = report?.confidence_score ?? 0;
+    const confColor = conf >= 70 ? "text-success" : conf >= 40 ? "text-warning" : "text-error";
+    const confBarColor = conf >= 70 ? "bg-success" : conf >= 40 ? "bg-warning" : "bg-error";
+
+    const metCount   = (report?.requirements_check ?? []).filter(r => r.met).length;
+    const totalCount = (report?.requirements_check ?? []).length;
+
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/my-tasks"
-                className="w-8 h-8 rounded-lg border border-base-300 flex items-center justify-center hover:bg-base-200 transition-colors"
-              >
-                <ArrowLeftIcon className="w-4 h-4 text-base-content/60" />
-              </Link>
-              <div>
-                <h1 className="text-lg font-bold text-base-content leading-tight">
-                  Smart Contract Audit — DeFi Protocol
-                </h1>
-                <p className="text-xs text-base-content/40 font-mono mt-0.5">Task ID: #DW-8829-X</p>
-              </div>
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <Link href="/my-tasks" className="w-8 h-8 rounded-lg border border-base-300 flex items-center justify-center hover:bg-base-200 transition-colors">
+              <ArrowLeftIcon className="w-4 h-4 text-base-content/60" />
+            </Link>
+            <div>
+              <h1 className="text-lg font-bold text-base-content leading-tight">AI Submission Review</h1>
+              <p className="text-xs text-base-content/40 font-mono mt-0.5">Task #{id}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="bg-base-content text-base-100 text-xs font-semibold px-3 py-1.5 rounded-full">
-                Reviewing Submission
-              </span>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center">
-                  <span className="text-xs font-bold text-primary">V</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm font-semibold text-base-content">vitalik.eth</span>
-                  <CheckCircleSolid className="w-4 h-4 text-primary" />
-                </div>
-              </div>
+            <div className="ml-auto flex items-center gap-2">
+              {isEvaluating && (
+                <span className="flex items-center gap-2 bg-warning/10 text-warning text-xs font-semibold px-3 py-1.5 rounded-full">
+                  <span className="loading loading-spinner loading-xs" /> AI Evaluating…
+                </span>
+              )}
+              {isError && <span className="badge badge-error badge-lg">Evaluation Error</span>}
             </div>
           </div>
 
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-4">
-              <div className="bg-base-100 rounded-2xl border border-base-200 p-10 flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-5">
-                  <ClockIcon className="w-8 h-8 text-primary" />
-                </div>
-                <h2 className="text-2xl font-bold text-base-content mb-3">Waiting for Client Decision</h2>
-                <p className="text-sm text-base-content/60 leading-relaxed max-w-sm">
-                  The AI assessment is complete. We are currently waiting for the client to review the submission and
-                  provide final approval.
-                </p>
-              </div>
 
-              <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
-                <h2 className="text-sm font-semibold text-base-content/70 mb-4">Communication History</h2>
-                <div className="bg-base-200 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center shrink-0">
-                      <span className="text-[10px] font-bold text-primary-content">AI</span>
+              {/* Evaluating */}
+              {isEvaluating && (
+                <div className="bg-base-100 rounded-2xl border border-base-200 p-12 flex flex-col items-center text-center">
+                  <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-5">
+                    <span className="loading loading-spinner loading-lg text-primary" />
+                  </div>
+                  <h2 className="text-xl font-bold text-base-content mb-2">AI is reviewing your submission</h2>
+                  <p className="text-sm text-base-content/50 max-w-sm">
+                    Reading files, checking code quality, security, and task completion. Updates automatically.
+                  </p>
+                </div>
+              )}
+
+              {/* Error */}
+              {isError && (
+                <div className="bg-base-100 rounded-2xl border border-error/30 p-10 flex flex-col items-center text-center">
+                  <ExclamationTriangleIcon className="w-12 h-12 text-error mb-4" />
+                  <h2 className="text-xl font-bold text-base-content mb-2">Evaluation failed</h2>
+                  <p className="text-sm text-base-content/50">Check the backend logs for details.</p>
+                </div>
+              )}
+
+              {/* Report ready */}
+              {isDone && report && (
+                <>
+                  {/* Verdict banner */}
+                  {recStyle && (
+                    <div className={`rounded-2xl border ${recStyle.bg} ${recStyle.border} p-5 flex items-center gap-4`}>
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shrink-0 ${recStyle.bg} border ${recStyle.border} ${recStyle.text}`}>
+                        {recStyle.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-bold text-lg ${recStyle.text}`}>{recStyle.label}</p>
+                        <p className="text-xs text-base-content/50 mt-0.5">
+                          Confidence: <span className={`font-semibold ${confColor}`}>{report.confidence_score}%</span>
+                          {totalCount > 0 && <span className="ml-3">Requirements: <span className="font-semibold text-base-content">{metCount}/{totalCount} met</span></span>}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">Complexity</p>
+                        <p className="text-2xl font-bold text-base-content">{report.task_complexity}<span className="text-sm font-normal text-base-content/40">/1000</span></p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-base-content/80 italic leading-relaxed">
-                        &ldquo;Analysis complete. Submission meets 4 out of 5 primary scope targets. Awaiting client
-                        confirmation or automated 48h timeout.&rdquo;
-                      </p>
-                      <p className="text-[10px] text-base-content/40 mt-2">Just now</p>
+                  )}
+
+                  {/* Files submitted / missing */}
+                  {((report.files_submitted ?? []).length > 0 || (report.files_missing ?? []).length > 0) && (
+                    <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
+                      <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Files</p>
+                      <div className="flex gap-4 flex-wrap">
+                        {(report.files_submitted ?? []).length > 0 && (
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-success mb-2">Submitted ({report.files_submitted.length})</p>
+                            <div className="space-y-1">
+                              {report.files_submitted.map(f => (
+                                <div key={f} className="flex items-center gap-2 bg-success/5 border border-success/20 rounded-lg px-3 py-1.5">
+                                  <span className="text-success text-xs">✓</span>
+                                  <span className="font-mono text-xs text-base-content/80 truncate">{f}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {(report.files_missing ?? []).length > 0 && (
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-error mb-2">Missing ({report.files_missing.length})</p>
+                            <div className="space-y-1">
+                              {report.files_missing.map(f => (
+                                <div key={f} className="flex items-center gap-2 bg-error/5 border border-error/20 rounded-lg px-3 py-1.5">
+                                  <span className="text-error text-xs">✗</span>
+                                  <span className="font-mono text-xs text-base-content/80 truncate">{f}</span>
+                                </div>
+                          ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confidence bar */}
+                  <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold tracking-widest text-base-content/40 uppercase">Quality Score</p>
+                      <p className={`text-2xl font-bold ${confColor}`}>{report.confidence_score}%</p>
+                    </div>
+                    <div className="w-full bg-base-200 rounded-full h-2.5">
+                      <div className={`h-2.5 rounded-full transition-all duration-700 ${confBarColor}`} style={{ width: `${report.confidence_score}%` }} />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-base-content/30 mt-1.5">
+                      <span>Empty / Dangerous</span><span>Acceptable</span><span>Production Ready</span>
                     </div>
                   </div>
-                </div>
-              </div>
+
+                  {/* Requirements checklist */}
+                  {(report.requirements_check ?? []).length > 0 && (
+                    <div className="bg-base-100 rounded-2xl border border-base-200 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="font-bold text-base-content">Task Requirements</h2>
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${metCount === totalCount ? "bg-success/15 text-success" : metCount === 0 ? "bg-error/15 text-error" : "bg-warning/15 text-warning"}`}>
+                          {metCount}/{totalCount} met
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {report.requirements_check.map((req, i) => (
+                          <div key={i} className={`rounded-xl p-4 border ${req.met ? "bg-success/5 border-success/20" : "bg-error/5 border-error/20"}`}>
+                            <div className="flex items-start gap-3">
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold ${req.met ? "bg-success text-success-content" : "bg-error text-error-content"}`}>
+                                {req.met ? "✓" : "✗"}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-base-content">{req.requirement}</p>
+                                <p className={`text-xs mt-1 leading-relaxed ${req.met ? "text-base-content/60" : "text-error/80"}`}>{req.detail}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Code issues */}
+                  {(report.code_issues ?? []).length > 0 && (
+                    <div className="bg-base-100 rounded-2xl border border-base-200 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="font-bold text-base-content">Code Issues</h2>
+                        <div className="flex gap-1.5">
+                          {["critical","high","medium","low"].map(sev => {
+                            const count = report.code_issues.filter(i => i.severity === sev).length;
+                            if (!count) return null;
+                            const s = sevStyle(sev);
+                            return (
+                              <span key={sev} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.badge}`}>
+                                {count} {sev}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        {report.code_issues.map((issue, i) => {
+                          const s = sevStyle(issue.severity);
+                          return (
+                            <div key={i} className="rounded-xl border border-base-200 overflow-hidden">
+                              {/* Issue header */}
+                              <div className="flex items-center gap-0 bg-base-200">
+                                <div className={`w-1 self-stretch ${s.bar}`} />
+                                <div className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${s.badge}`}>
+                                    {issue.severity}
+                                  </span>
+                                  <p className="text-sm font-semibold text-base-content truncate">{issue.issue}</p>
+                                  <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                                    <span className="text-[10px] font-mono bg-base-300 text-base-content/70 px-2 py-0.5 rounded">
+                                      {issue.file}
+                                    </span>
+                                    <span className="text-[10px] font-mono bg-base-300 text-base-content/50 px-1.5 py-0.5 rounded">
+                                      :{issue.line}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Detail */}
+                              <div className="px-5 py-3 bg-base-100">
+                                <p className="text-xs text-base-content/70 leading-relaxed">{issue.detail}</p>
+                                {/* Code snippet */}
+                                {issue.snippet && (
+                                  <div className="mt-2 bg-base-content/5 border border-base-200 rounded-lg px-3 py-2 font-mono text-xs text-base-content/80 overflow-x-auto">
+                                    <span className="text-base-content/30 select-none mr-2">{issue.line}</span>
+                                    {issue.snippet}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Full report — collapsible */}
+                  <div className="bg-base-100 rounded-2xl border border-base-200 overflow-hidden">
+                    <button
+                      onClick={() => setReportExpanded(p => !p)}
+                      className="w-full flex items-center justify-between px-6 py-4 hover:bg-base-200/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shrink-0">
+                          <span className="text-[10px] font-bold text-primary-content">AI</span>
+                        </div>
+                        <span className="font-bold text-base-content">Full AI Evaluation Report</span>
+                      </div>
+                      <span className="text-base-content/40 text-sm">{reportExpanded ? "▲ collapse" : "▼ expand"}</span>
+                    </button>
+                    {reportExpanded && (
+                      <div className="px-6 pb-6">
+                        <div className="bg-base-200 rounded-xl p-4 max-h-[500px] overflow-y-auto">
+                          <pre className="text-sm text-base-content/80 leading-relaxed whitespace-pre-wrap font-sans">
+                            {report.detailed_report}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
-            <div className="w-64 shrink-0 space-y-3">
-              <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
-                <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
-                  Awaiting Action
-                </p>
-                <p className="text-xs text-base-content/60 leading-relaxed mb-4">
-                  The AI has verified your submission. You can wait for the client&apos;s manual approval or use the
-                  48-hour auto-release. If the client requests changes you feel are unfair, use the &apos;Deny&apos;
-                  option.
-                </p>
-                <div className="space-y-2">
-                  <button className="btn btn-primary w-full gap-2">
-                    <CheckCircleIcon className="w-4 h-4" />
-                    Accept AI Decision
-                  </button>
-                  <button className="btn btn-outline w-full gap-2">
-                    <XCircleIcon className="w-4 h-4" />
-                    Deny Changes
-                  </button>
+            {/* Sidebar */}
+            <div className="w-60 shrink-0 space-y-3">
+              {isEvaluating && (
+                <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
+                  <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Status</p>
+                  <p className="text-xs text-base-content/60 leading-relaxed">
+                    AI is analyzing your files. This page refreshes every 5 seconds.
+                  </p>
                 </div>
-              </div>
+              )}
 
-              <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
-                <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-4">
-                  Financial Status
-                </p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-base-content/50">Escrow Amount</span>
-                    <span className="text-base-content font-medium">2,450 USDC</span>
+              {isDone && (
+                <>
+                  <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
+                    <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">What Happens Next</p>
+                    <div className="space-y-3">
+                      {[
+                        { step: "1", text: "Client reviews this AI report" },
+                        { step: "2", text: "Client approves, rejects, or escalates to DAO" },
+                        { step: "3", text: "Escrow released on approval" },
+                      ].map(({ step, text }) => (
+                        <div key={step} className="flex items-start gap-2.5">
+                          <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                            <span className="text-[10px] font-bold text-primary">{step}</span>
+                          </div>
+                          <p className="text-xs text-base-content/60 leading-relaxed">{text}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-base-content/50">Service Fee (2%)</span>
-                    <span className="text-base-content font-medium">-49 USDC</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-base-200">
-                    <span className="font-bold text-base-content">Net Payout</span>
-                    <span className="font-bold text-primary">2,401 USDC</span>
-                  </div>
-                </div>
-              </div>
+
+                  {/* Issue count summary */}
+                  {(report?.code_issues ?? []).length > 0 && (
+                    <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
+                      <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Issues by Severity</p>
+                      <div className="space-y-2">
+                        {["critical","high","medium","low"].map(sev => {
+                          const count = (report?.code_issues ?? []).filter(i => i.severity === sev).length;
+                          if (!count) return null;
+                          const s = sevStyle(sev);
+                          return (
+                            <div key={sev} className="flex items-center justify-between">
+                              <span className={`text-xs font-semibold capitalize ${s.text}`}>{sev}</span>
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${s.badge}`}>{count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
 
               <div className="bg-base-200/50 rounded-2xl border border-base-200 p-5">
                 <div className="flex items-center gap-2 mb-2">
                   <ExclamationTriangleIcon className="w-4 h-4 text-base-content/40" />
-                  <p className="text-sm font-bold text-base-content">Need help with this review?</p>
+                  <p className="text-sm font-bold text-base-content">Incorrect evaluation?</p>
                 </div>
-                <p className="text-xs text-base-content/55 leading-relaxed mb-3">
-                  If the AI evaluation seems incorrect, you can request a manual mediator review.
+                <p className="text-xs text-base-content/55 leading-relaxed">
+                  If the AI result seems wrong, the client can escalate to DAO for a human review.
                 </p>
-                <button className="text-xs text-primary hover:underline font-medium">Contact Support</button>
               </div>
             </div>
           </div>
@@ -447,7 +702,10 @@ export default function TaskViewPage() {
                       ecosystem.
                     </p>
                   </div>
-                  <button className="btn btn-outline btn-sm gap-2 shrink-0">
+                  <button
+                    className="btn btn-outline btn-sm gap-2 shrink-0"
+                    onClick={() => !isClient && router.push(`/my-tasks/${id}/upload`)}
+                  >
                     <ArrowPathIcon className="w-4 h-4" />
                     {isClient ? "Request Update" : "Submit Work"}
                   </button>
@@ -534,19 +792,20 @@ export default function TaskViewPage() {
                     <UserCircleIcon className="w-4 h-4" />
                     View Profile
                   </button>
-                  <button className="btn btn-outline w-full gap-2">
-                    {isClient ? (
-                      <>
-                        <CurrencyDollarIcon className="w-4 h-4" />
-                        Release Escrow
-                      </>
-                    ) : (
-                      <>
-                        <BriefcaseIcon className="w-4 h-4" />
-                        Request Payment
-                      </>
-                    )}
-                  </button>
+                  {isClient ? (
+                    <button className="btn btn-outline w-full gap-2">
+                      <CurrencyDollarIcon className="w-4 h-4" />
+                      Release Escrow
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-primary w-full gap-2"
+                      onClick={() => router.push(`/my-tasks/${id}/upload`)}
+                    >
+                      <ArrowUpTrayIcon className="w-4 h-4" />
+                      Submit Task
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

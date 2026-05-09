@@ -27,14 +27,67 @@ const CATEGORIES = [
   "Technical Writing",
 ];
 
+const ALL_SKILLS = [
+  "Solidity",
+  "Ethereum",
+  "Smart Contracts",
+  "Web3.js",
+  "Ethers.js",
+  "Hardhat",
+  "Foundry",
+  "TypeScript",
+  "JavaScript",
+  "React",
+  "Next.js",
+  "Node.js",
+  "Python",
+  "Rust",
+  "Go",
+  "DeFi",
+  "NFT",
+  "ERC-20",
+  "ERC-721",
+  "ERC-1155",
+  "OpenZeppelin",
+  "Security Audit",
+  "Penetration Testing",
+  "Gas Optimization",
+  "Layer 2",
+  "IPFS",
+  "GraphQL",
+  "REST API",
+  "PostgreSQL",
+  "MongoDB",
+  "Docker",
+  "AWS",
+  "CI/CD",
+  "UI/UX Design",
+  "Figma",
+  "Tailwind CSS",
+  "Frontend",
+  "Backend",
+  "Full Stack",
+  "Wagmi",
+  "Viem",
+  "RainbowKit",
+  "Zero Knowledge Proofs",
+  "Chainlink",
+  "The Graph",
+  "Subgraph",
+  "Multisig",
+  "DAO Governance",
+  "Technical Writing",
+  "Documentation",
+];
+
 const CATEGORY_SKILLS: Record<string, string[]> = {
-  "Smart Contract Security": ["solidity", "security-audit", "evm"],
-  "DeFi Development": ["solidity", "defi", "evm"],
-  "NFT / Digital Art": ["solidity", "nft", "erc-721"],
-  "Frontend Development": ["react", "typescript", "web3"],
-  "Backend Development": ["node", "api", "databases"],
-  "UI / UX Design": ["figma", "design", "ux"],
-  "Technical Writing": ["documentation", "technical-writing"],
+  "Smart Contract Security": ["Solidity", "Security Audit", "Ethereum"],
+  "DeFi Development": ["Solidity", "DeFi", "Ethers.js"],
+  "NFT / Digital Art": ["Solidity", "NFT", "ERC-721"],
+  "Frontend Development": ["React", "TypeScript", "Web3.js"],
+  "Backend Development": ["Node.js", "REST API", "PostgreSQL"],
+  "UI / UX Design": ["Figma", "UI/UX Design", "Tailwind CSS"],
+  "Technical Writing": ["Technical Writing", "Documentation"],
 };
 
 type AiRating = {
@@ -66,28 +119,44 @@ const PostTaskPage = () => {
   const router = useRouter();
   const { address } = useAccount();
 
-  const [title, setTitle] = useState("Solidity Smart Contract Audit: Liquidity Protocol");
+  const [title, setTitle] = useState("");
   const [category, setCategory] = useState("Smart Contract Security");
-  const [description, setDescription] = useState(
-    "We are looking for a comprehensive security audit of our new Liquidity Protocol smart contracts. " +
-      "The audit should focus on potential reentrancy vulnerabilities, access control, and gas efficiency optimizations.\n\n" +
-      "The codebase consists of ~800 SLOC across 4 main contracts.",
-  );
-  const [budgetDwt, setBudgetDwt] = useState("2500");
+  const [description, setDescription] = useState("");
+  const [budgetDwt, setBudgetDwt] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [extraSkills, setExtraSkills] = useState("");
+  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(
+    new Set(CATEGORY_SKILLS["Smart Contract Security"]),
+  );
 
   const [aiRating, setAiRating] = useState<AiRating | null>(null);
   const [isRating, setIsRating] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
 
-  const skills = [
-    ...CATEGORY_SKILLS[category],
-    ...extraSkills
-      .split(",")
-      .map(s => s.trim())
-      .filter(Boolean),
-  ];
+  const handleCategoryChange = (newCategory: string) => {
+    setCategory(newCategory);
+    setSelectedSkills(prev => {
+      const next = new Set(prev);
+      // Remove old category skills
+      CATEGORY_SKILLS[category]?.forEach(s => next.delete(s));
+      // Add new category skills
+      CATEGORY_SKILLS[newCategory]?.forEach(s => next.add(s));
+      return next;
+    });
+  };
+
+  const toggleSkill = (skill: string) => {
+    setSelectedSkills(prev => {
+      const next = new Set(prev);
+      if (next.has(skill)) {
+        next.delete(skill);
+      } else {
+        next.add(skill);
+      }
+      return next;
+    });
+  };
+
+  const skills = Array.from(selectedSkills);
 
   const budgetWei = (() => {
     try {
@@ -97,7 +166,6 @@ const PostTaskPage = () => {
     }
   })();
 
-  // Deployed contract info to get marketplace address for the allowance check
   const { data: marketplaceInfo } = useDeployedContractInfo({ contractName: "JobMarketplace" });
   const marketplaceAddress = marketplaceInfo?.address;
 
@@ -164,6 +232,7 @@ const PostTaskPage = () => {
     if (!title.trim()) return notification.error("Task title is required");
     if (!description.trim()) return notification.error("Description is required");
     if (budgetWei === 0n) return notification.error("Budget must be greater than 0");
+    if (skills.length === 0) return notification.error("Select at least one skill");
 
     const deadlineTs = deadline
       ? BigInt(Math.floor(new Date(deadline).getTime() / 1000))
@@ -174,10 +243,10 @@ const PostTaskPage = () => {
         functionName: "postJob",
         args: [title, description, budgetWei, deadlineTs, skills],
       });
-      notification.success("Task posted on-chain!");
+      notification.success("Job posted on-chain and budget escrowed!");
       router.push("/dashboard");
     } catch (e) {
-      notification.error("Failed to post task");
+      notification.error("Failed to post job");
       console.error(e);
     }
   };
@@ -188,41 +257,44 @@ const PostTaskPage = () => {
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-base-content mb-1">Post a New Task</h1>
-            <p className="text-sm text-base-content/50">Define your requirements and find the perfect freelancer.</p>
+            <h1 className="text-2xl font-bold text-base-content mb-1">Post a Job</h1>
+            <p className="text-sm text-base-content/50">
+              Define your requirements — the budget is held in escrow until the work is complete.
+            </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-base-content/40 mt-1 shrink-0">
             <ClockIcon className="w-3.5 h-3.5" />
-            <span>Budget paid in DWT tokens</span>
+            <span>Budget escrowed in DWT</span>
           </div>
         </div>
 
         <div className="space-y-6">
-          {/* Title + Category */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-base-content">Task Title</label>
-              <input
-                type="text"
-                className="input input-bordered w-full"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-base-content">Category</label>
-              <select
-                className="select select-bordered w-full"
-                value={category}
-                onChange={e => setCategory(e.target.value)}
-              >
-                {CATEGORIES.map(c => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Title */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-base-content">Job Title</label>
+            <input
+              type="text"
+              className="input input-bordered w-full"
+              placeholder="e.g. Solidity Smart Contract Audit for DeFi Protocol"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+            />
+          </div>
+
+          {/* Category */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-base-content">Category</label>
+            <select
+              className="select select-bordered w-full"
+              value={category}
+              onChange={e => handleCategoryChange(e.target.value)}
+            >
+              {CATEGORIES.map(c => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Budget + Deadline */}
@@ -237,6 +309,11 @@ const PostTaskPage = () => {
                 onChange={e => setBudgetDwt(e.target.value)}
                 placeholder="e.g. 2500"
               />
+              {budgetDwt && Number(budgetDwt) > 0 && (
+                <p className="text-xs text-base-content/40">
+                  Platform fee: {(Number(budgetDwt) * 0.025).toFixed(2)} DWT (2.5%)
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-base-content">Deadline</label>
@@ -247,36 +324,46 @@ const PostTaskPage = () => {
                 onChange={e => setDeadline(e.target.value)}
                 min={new Date(Date.now() + 86400000).toISOString().split("T")[0]}
               />
+              {!deadline && <p className="text-xs text-base-content/40">Defaults to 7 days from now</p>}
             </div>
           </div>
 
           {/* Description */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-base-content">Detailed Description</label>
+            <label className="text-sm font-medium text-base-content">Job Description</label>
             <textarea
               className="textarea textarea-bordered w-full resize-none"
               rows={6}
+              placeholder="Describe the work in detail — scope, deliverables, requirements, context…"
               value={description}
               onChange={e => setDescription(e.target.value)}
             />
           </div>
 
-          {/* Extra skills */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-base-content">
-              Additional Skills <span className="text-base-content/40 font-normal">(comma-separated, optional)</span>
-            </label>
-            <input
-              type="text"
-              className="input input-bordered w-full"
-              placeholder="e.g. foundry, hardhat, openzeppelin"
-              value={extraSkills}
-              onChange={e => setExtraSkills(e.target.value)}
-            />
-            <p className="text-xs text-base-content/40">
-              Auto-included from category:{" "}
-              <span className="text-base-content/60">{CATEGORY_SKILLS[category].join(", ")}</span>
-            </p>
+          {/* Skills picker */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <ClipboardDocumentListIcon className="w-4 h-4 text-base-content/60" />
+              <label className="text-sm font-medium text-base-content">Required Skills</label>
+              <span className="text-xs text-base-content/40">({selectedSkills.size} selected)</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ALL_SKILLS.map(skill => {
+                const active = selectedSkills.has(skill);
+                return (
+                  <button
+                    key={skill}
+                    type="button"
+                    onClick={() => toggleSkill(skill)}
+                    className={`badge badge-lg cursor-pointer select-none transition-all ${
+                      active ? "badge-primary" : "badge-outline opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    {skill}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* AI Analysis */}
@@ -294,7 +381,6 @@ const PostTaskPage = () => {
 
             {aiRating ? (
               <>
-                {/* Complexity */}
                 <div>
                   <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-2">Complexity</p>
                   <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -310,7 +396,6 @@ const PostTaskPage = () => {
 
                 <div className="divider my-1" />
 
-                {/* Clarity */}
                 <div>
                   <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-2">
                     Task Clarity
@@ -343,19 +428,25 @@ const PostTaskPage = () => {
             )}
           </div>
 
-          {/* Acceptance Criteria */}
-          <div className="border border-base-300 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <ClipboardDocumentListIcon className="w-5 h-5 text-base-content/60" />
-              <h2 className="font-semibold text-base-content">Skills Required</h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {skills.map(s => (
-                <span key={s} className="badge badge-outline">
-                  {s}
-                </span>
-              ))}
-            </div>
+          {/* Escrow notice */}
+          <div className="alert alert-info text-sm">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              className="stroke-current shrink-0 w-5 h-5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>
+              When you post this job, <strong>{budgetDwt || "0"} DWT</strong> will be transferred from your wallet into
+              the smart contract escrow. Funds are only released to the freelancer after work is approved.
+            </span>
           </div>
 
           {/* Action bar */}
@@ -367,18 +458,21 @@ const PostTaskPage = () => {
                 disabled={isApproving || !address || budgetWei === 0n}
               >
                 {isApproving ? <span className="loading loading-spinner loading-xs" /> : null}
-                Approve DWT
+                {isApproving ? "Approving…" : "1. Approve DWT Spending"}
               </button>
             ) : (
-              <button className="btn btn-primary" onClick={handlePost} disabled={isPosting || !address}>
+              <button
+                className="btn btn-primary"
+                onClick={handlePost}
+                disabled={isPosting || !address || budgetWei === 0n}
+              >
                 {isPosting ? <span className="loading loading-spinner loading-xs" /> : null}
-                Fund Escrow &amp; Post
+                {isPosting ? "Posting…" : "Post a Job"}
               </button>
             )}
-            <button className="btn btn-outline">Save Draft</button>
-            <span className="ml-auto text-sm text-base-content/50">
-              Fee: {budgetDwt ? (Number(budgetDwt) * 0.025).toFixed(2) : "0.00"} DWT (2.5%)
-            </span>
+            {!needsApproval && budgetWei > 0n && (
+              <span className="text-xs text-base-content/50">Step 1 done — click Post a Job to escrow funds</span>
+            )}
           </div>
         </div>
       </div>
