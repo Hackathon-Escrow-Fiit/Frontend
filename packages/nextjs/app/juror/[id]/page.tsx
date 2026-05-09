@@ -619,7 +619,15 @@ export default function JurorDetailPage() {
               Time Remaining to Vote
             </p>
             {expired ? (
-              <p className="text-lg font-bold text-error">Voting Ended</p>
+              <div className="flex flex-col items-end gap-2">
+                <p className="text-lg font-bold text-error">Voting Ended</p>
+                <Link
+                  href={`/juror/${id}/result`}
+                  className="btn btn-primary btn-xs gap-1"
+                >
+                  View Final Result →
+                </Link>
+              </div>
             ) : (
               <p className="text-2xl font-bold text-primary tabular-nums">
                 {String(h).padStart(2, "0")}h : {String(m).padStart(2, "0")}m : {String(s).padStart(2, "0")}s
