@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { blo } from "blo";
 import {
   ArrowDownTrayIcon,
@@ -16,6 +16,7 @@ import {
   FlagIcon,
   InformationCircleIcon,
   LockClosedIcon,
+  MagnifyingGlassIcon,
   PaperAirplaneIcon,
   PaperClipIcon,
   PencilSquareIcon,
@@ -148,9 +149,16 @@ const features = [
 const MessagesPage = () => {
   const [selected, setSelected] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const conv = conversations.find(c => c.id === selected) ?? null;
+
+  const filteredConversations = useMemo(() => {
+    if (!search.trim()) return conversations;
+    const q = search.toLowerCase();
+    return conversations.filter(c => c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q));
+  }, [search]);
 
   return (
     <AppLayout>
@@ -163,8 +171,20 @@ const MessagesPage = () => {
               <PencilSquareIcon className="w-4 h-4" />
             </button>
           </div>
+          <div className="px-3 py-2 border-b border-base-200">
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-base-content/40 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search conversations..."
+                className="input input-sm w-full pl-8 bg-base-200 border-transparent focus:border-primary text-xs rounded-lg"
+              />
+            </div>
+          </div>
           <div className="flex-1 overflow-y-auto">
-            {conversations.map(c => (
+            {filteredConversations.map(c => (
               <button
                 key={c.id}
                 onClick={() => setSelected(c.id)}
@@ -183,6 +203,9 @@ const MessagesPage = () => {
                 </div>
               </button>
             ))}
+            {filteredConversations.length === 0 && (
+              <p className="text-xs text-base-content/30 text-center py-6">No conversations found.</p>
+            )}
           </div>
         </div>
 
