@@ -96,6 +96,15 @@ export function useXmtpMessages(conversation: Dm | null) {
       } finally {
         if (!cancelled) setIsLoading(false);
       }
+
+      // Background sync — ensures first messages sent to a new DM are fetched from the network
+      conversation!.sync().then(async () => {
+        if (cancelled) return;
+        const fresh = await conversation!.messages();
+        if (cancelled) return;
+        const decoded = (await Promise.all(fresh.map(decodeMsg))).filter((m): m is XmtpMessage => m !== null);
+        if (!cancelled) setMessages(decoded);
+      }).catch(() => {});
     }
 
     async function startStream() {
@@ -161,9 +170,11 @@ export function useXmtpMessages(conversation: Dm | null) {
             filename: file.name,
           });
         }
-      } finally {
+      } catch (e) {
         setIsSending(false);
+        throw e;
       }
+      setIsSending(false);
     },
     [conversation],
   );
