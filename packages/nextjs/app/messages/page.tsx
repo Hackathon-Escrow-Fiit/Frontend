@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
+import type { Dm } from "@xmtp/browser-sdk";
 import { blo } from "blo";
+import { useAccount } from "wagmi";
 import {
   ArrowDownTrayIcon,
-  ArrowLeftIcon,
-  ArrowTopRightOnSquareIcon,
   ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
   CreditCardIcon,
@@ -20,15 +22,11 @@ import {
   PencilSquareIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
-import Picker from "@emoji-mart/react";
-import data from "@emoji-mart/data";
-import { useAccount } from "wagmi";
-import { notification } from "~~/utils/scaffold-eth";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
-import type { Dm } from "@xmtp/browser-sdk";
 import { useXmtp } from "~~/hooks/useXmtp";
-import { useXmtpConversations, type XmtpConversation } from "~~/hooks/useXmtpConversations";
-import { useXmtpMessages, type XmtpMessage } from "~~/hooks/useXmtpMessages";
+import { type XmtpConversation, useXmtpConversations } from "~~/hooks/useXmtpConversations";
+import { type XmtpMessage, useXmtpMessages } from "~~/hooks/useXmtpMessages";
+import { notification } from "~~/utils/scaffold-eth";
 
 const features = [
   {
@@ -61,7 +59,10 @@ function formatNs(ns: bigint): string {
 
 function fallbackAddress(str: string): `0x${string}` {
   // derive a deterministic hex from the inbox ID for the avatar
-  const hex = str.replace(/[^a-fA-F0-9]/g, "").padEnd(40, "0").slice(0, 40);
+  const hex = str
+    .replace(/[^a-fA-F0-9]/g, "")
+    .padEnd(40, "0")
+    .slice(0, 40);
   return `0x${hex}` as `0x${string}`;
 }
 
@@ -116,7 +117,9 @@ function ConvoItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
           <span className="text-sm font-medium text-base-content truncate">
-            {entry.peerAddress ? `${entry.peerAddress.slice(0, 6)}…${entry.peerAddress.slice(-4)}` : entry.id.slice(0, 12)}
+            {entry.peerAddress
+              ? `${entry.peerAddress.slice(0, 6)}…${entry.peerAddress.slice(-4)}`
+              : entry.id.slice(0, 12)}
           </span>
           <span className="text-[10px] text-base-content/40 ml-2 shrink-0">{entry.time}</span>
         </div>
@@ -161,9 +164,7 @@ function MessageBubble({ msg, myInboxId }: { msg: XmtpMessage; myInboxId: string
       <img src={blo(avatarAddr)} alt="peer" className="w-9 h-9 rounded-full shrink-0 mt-0.5" />
       <div className="max-w-lg">
         <div className="flex items-center gap-1.5 mb-1.5">
-          <span className="text-sm font-semibold text-base-content">
-            {msg.senderInboxId.slice(0, 8)}…
-          </span>
+          <span className="text-sm font-semibold text-base-content">{msg.senderInboxId.slice(0, 8)}…</span>
           <CheckBadgeIcon className="w-4 h-4 text-primary" />
           <span className="text-xs text-base-content/40">{time}</span>
         </div>
@@ -179,7 +180,15 @@ function MessageBubble({ msg, myInboxId }: { msg: XmtpMessage; myInboxId: string
   );
 }
 
-function AttachmentBubble({ filename, mimeType, content }: { filename: string; mimeType: string; content: Uint8Array }) {
+function AttachmentBubble({
+  filename,
+  mimeType,
+  content,
+}: {
+  filename: string;
+  mimeType: string;
+  content: Uint8Array;
+}) {
   const download = () => {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
@@ -354,7 +363,11 @@ function ChatPanel({ entry }: { entry: XmtpConversation }) {
             disabled={!input.trim() || isSending}
             className="btn btn-primary btn-sm gap-1.5 px-4"
           >
-            {isSending ? <span className="loading loading-spinner loading-xs" /> : <PaperAirplaneIcon className="w-4 h-4" />}
+            {isSending ? (
+              <span className="loading loading-spinner loading-xs" />
+            ) : (
+              <PaperAirplaneIcon className="w-4 h-4" />
+            )}
             Send
           </button>
         </div>
