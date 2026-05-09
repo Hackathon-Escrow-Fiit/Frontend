@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useAccount } from "wagmi";
 import {
   ArrowLeftIcon,
   ArrowUpTrayIcon,
@@ -11,7 +12,6 @@ import {
   TrashIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { useAccount } from "wagmi";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -107,7 +107,6 @@ export default function UploadWorkPage() {
         <div className="flex gap-5 items-start">
           {/* Left column */}
           <div className="flex-1 min-w-0 space-y-4">
-
             {/* Drop zone */}
             <div className="bg-base-100 rounded-2xl border border-base-200 p-6">
               <h2 className="font-bold text-base-content mb-4 flex items-center gap-2">
@@ -116,12 +115,21 @@ export default function UploadWorkPage() {
               </h2>
 
               <div
-                onDragOver={e => { e.preventDefault(); setDragging(true); }}
+                onDragOver={e => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
                 onDragLeave={() => setDragging(false)}
-                onDrop={e => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
+                onDrop={e => {
+                  e.preventDefault();
+                  setDragging(false);
+                  addFiles(e.dataTransfer.files);
+                }}
                 onClick={() => inputRef.current?.click()}
                 className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${
-                  dragging ? "border-primary bg-primary/5" : "border-base-300 hover:border-primary/50 hover:bg-base-200/30"
+                  dragging
+                    ? "border-primary bg-primary/5"
+                    : "border-base-300 hover:border-primary/50 hover:bg-base-200/30"
                 }`}
               >
                 <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -133,7 +141,10 @@ export default function UploadWorkPage() {
                 </p>
                 <button
                   className="btn btn-outline btn-sm"
-                  onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
+                  onClick={e => {
+                    e.stopPropagation();
+                    inputRef.current?.click();
+                  }}
                 >
                   Browse Files
                 </button>
@@ -176,8 +187,8 @@ export default function UploadWorkPage() {
             <div className="bg-base-100 rounded-2xl border border-base-200 p-6">
               <h2 className="font-bold text-base-content mb-1">Completion Notes</h2>
               <p className="text-xs text-base-content/40 mb-3">
-                Describe what you built, any known limitations, and instructions for the client.
-                This text is sent to the AI reviewer as the task description.
+                Describe what you built, any known limitations, and instructions for the client. This text is sent to
+                the AI reviewer as the task description.
               </p>
               <textarea
                 value={notes}
@@ -190,11 +201,7 @@ export default function UploadWorkPage() {
 
             {/* Actions */}
             <div className="flex gap-3">
-              <button
-                onClick={handleSubmit}
-                disabled={!ready || submitting}
-                className="btn btn-primary flex-1 gap-2"
-              >
+              <button onClick={handleSubmit} disabled={!ready || submitting} className="btn btn-primary flex-1 gap-2">
                 {submitting ? (
                   <>
                     <span className="loading loading-spinner loading-sm" />
@@ -228,7 +235,9 @@ export default function UploadWorkPage() {
                   { label: "Completion notes added", done: notes.trim().length > 0 },
                 ].map(({ label, done }) => (
                   <div key={label} className="flex items-center gap-2.5">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${done ? "bg-success/15" : "bg-base-200"}`}>
+                    <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${done ? "bg-success/15" : "bg-base-200"}`}
+                    >
                       <CheckCircleIcon className={`w-3.5 h-3.5 ${done ? "text-success" : "text-base-content/30"}`} />
                     </div>
                     <span className={`text-xs ${done ? "text-base-content" : "text-base-content/50"}`}>{label}</span>
@@ -262,9 +271,12 @@ export default function UploadWorkPage() {
             {/* Files summary */}
             {files.length > 0 && (
               <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
-                <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-2">Ready to Send</p>
+                <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-2">
+                  Ready to Send
+                </p>
                 <p className="text-2xl font-bold text-base-content">
-                  {files.length} <span className="text-sm font-medium text-base-content/50">file{files.length !== 1 ? "s" : ""}</span>
+                  {files.length}{" "}
+                  <span className="text-sm font-medium text-base-content/50">file{files.length !== 1 ? "s" : ""}</span>
                 </p>
                 <p className="text-xs text-base-content/40 mt-1">
                   {formatSize(files.reduce((s, f) => s + f.size, 0))} total
