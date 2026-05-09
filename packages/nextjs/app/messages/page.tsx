@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { blo } from "blo";
 import {
   ArrowDownTrayIcon,
@@ -20,6 +20,8 @@ import {
   PencilSquareIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
+import Picker from "@emoji-mart/react";
+import data from "@emoji-mart/data";
 import { useAccount } from "wagmi";
 import { notification } from "~~/utils/scaffold-eth";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
@@ -207,8 +209,22 @@ function ChatPanel({ entry }: { entry: XmtpConversation }) {
   const { address } = useAccount();
   const { messages, isLoading, isSending, sendMessage, sendAttachment } = useXmtpMessages(entry.conversation as Dm);
   const [input, setInput] = useState("");
+  const [showEmoji, setShowEmoji] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
   const myInboxId = client?.inboxId ?? "";
+
+  // Close picker when clicking outside
+  useEffect(() => {
+    if (!showEmoji) return;
+    function handleClick(e: MouseEvent) {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setShowEmoji(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showEmoji]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -311,9 +327,28 @@ function ChatPanel({ entry }: { entry: XmtpConversation }) {
               }
             }}
           />
-          <button className="btn btn-ghost btn-sm btn-square text-base-content/50">
-            <FaceSmileIcon className="w-5 h-5" />
-          </button>
+          <div className="relative" ref={emojiRef}>
+            <button
+              className="btn btn-ghost btn-sm btn-square text-base-content/50"
+              onClick={() => setShowEmoji(v => !v)}
+            >
+              <FaceSmileIcon className="w-5 h-5" />
+            </button>
+            {showEmoji && (
+              <div className="absolute bottom-10 right-0 z-50">
+                <Picker
+                  data={data}
+                  onEmojiSelect={(emoji: { native: string }) => {
+                    setInput(prev => prev + emoji.native);
+                    setShowEmoji(false);
+                  }}
+                  theme="auto"
+                  previewPosition="none"
+                  skinTonePosition="none"
+                />
+              </div>
+            )}
+          </div>
           <button
             onClick={handleSend}
             disabled={!input.trim() || isSending}
