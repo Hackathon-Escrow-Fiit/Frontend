@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { blo } from "blo";
+import { useAccount } from "wagmi";
 import {
   ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
@@ -11,6 +13,7 @@ import {
   Squares2X2Icon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
+import { useDecentraWorkRegistry } from "~~/hooks/scaffold-eth";
 
 type NavItem = {
   label: string;
@@ -47,13 +50,23 @@ const NavLink = ({ item, active }: { item: NavItem; active: boolean }) => (
 
 export const Sidebar = () => {
   const pathname = usePathname();
+  const { address } = useAccount();
+  const { currentName } = useDecentraWorkRegistry();
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
     <aside className="w-52 shrink-0 bg-base-100 border-r border-base-300 flex flex-col h-full">
-      <div className="px-5 py-5 border-b border-base-200">
-        <p className="font-bold text-primary text-sm">DocentraWork</p>
-        <p className="text-[10px] text-base-content/50 mt-0.5">Verified ENS Identity</p>
+      <div className="px-4 py-4 border-b border-base-200 flex items-center gap-3">
+        {address && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={blo(address as `0x${string}`)} alt="avatar" className="w-8 h-8 rounded-full shrink-0" />
+        )}
+        <div className="min-w-0">
+          <p className="font-bold text-primary text-sm truncate">
+            {currentName ? `${currentName}.eth` : "DecentraWork"}
+          </p>
+          <p className="text-[10px] text-base-content/50 mt-0.5">Verified ENS Identity</p>
+        </div>
       </div>
 
       <nav className="flex-1 px-3 py-3">

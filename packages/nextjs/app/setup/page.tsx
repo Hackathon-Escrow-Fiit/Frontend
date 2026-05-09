@@ -2,20 +2,45 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Address } from "@scaffold-ui/components";
 import type { NextPage } from "next";
-import { CheckCircleIcon } from "@heroicons/react/24/solid";
+import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
+import { useDecentraWorkRegistry } from "~~/hooks/scaffold-eth";
+import { notification } from "~~/utils/scaffold-eth";
 
 type Role = "freelancer" | "client" | null;
 
 const SetupPage: NextPage = () => {
+  const router = useRouter();
   const [ensHandle, setEnsHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<Role>(null);
-  const ensAvailable = ensHandle.length > 0;
+
+  const { isAvailable, isChecking, isRegistering, register } = useDecentraWorkRegistry(ensHandle);
 
   const currentStep = displayName && role ? 3 : ensHandle ? 2 : 1;
+  const canSubmit = ensHandle.length >= 3 && isAvailable && displayName && role && !isRegistering;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    try {
+      await register(ensHandle);
+      notification.success(`Registered ${ensHandle}.decentrawork.eth!`);
+      router.push("/dashboard");
+    } catch {
+      notification.error("Registration failed. Please try again.");
+    }
+  };
+
+  const availabilityIndicator = () => {
+    if (!ensHandle || ensHandle.length < 3) return null;
+    if (isChecking) return <span className="loading loading-spinner loading-xs text-base-content/40" />;
+    if (isAvailable)
+      return <CheckCircleIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />;
+    return <XCircleIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-error" />;
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-base-200">
@@ -67,18 +92,26 @@ const SetupPage: NextPage = () => {
               <input
                 type="text"
                 value={ensHandle}
-                onChange={e => setEnsHandle(e.target.value)}
+                onChange={e => setEnsHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                 className="input input-bordered w-full pr-10 text-sm"
-                placeholder="yourname.decentrawork.eth"
+                placeholder="yourname"
+                maxLength={32}
               />
-              {ensAvailable && (
-                <CheckCircleIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />
-              )}
+              {availabilityIndicator()}
             </div>
-            {ensAvailable && (
-              <p className="text-xs text-success mt-1.5 flex items-center gap-1">
+            <p className="text-[11px] text-base-content/40 mt-1.5">
+              {ensHandle ? `${ensHandle}.decentrawork.eth` : "yourname.decentrawork.eth"}
+            </p>
+            {ensHandle.length >= 3 && !isChecking && isAvailable === false && (
+              <p className="text-xs text-error mt-1 flex items-center gap-1">
+                <XCircleIcon className="w-3.5 h-3.5 shrink-0" />
+                This handle is already taken.
+              </p>
+            )}
+            {ensHandle.length >= 3 && !isChecking && isAvailable && (
+              <p className="text-xs text-success mt-1 flex items-center gap-1">
                 <CheckCircleIcon className="w-3.5 h-3.5 shrink-0" />
-                This ENS handle is available to claim.
+                This handle is available!
               </p>
             )}
           </div>
@@ -116,7 +149,9 @@ const SetupPage: NextPage = () => {
             </div>
           </div>
 
-          <button className="btn btn-primary w-full text-sm font-semibold">Complete Setup →</button>
+          <button className="btn btn-primary w-full text-sm font-semibold" disabled={!canSubmit} onClick={handleSubmit}>
+            {isRegistering ? <span className="loading loading-spinner loading-sm" /> : "Complete Setup →"}
+          </button>
 
           <p className="text-xs text-center text-base-content/50 mt-4 leading-relaxed">
             By continuing, you agree to our{" "}
