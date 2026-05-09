@@ -2,16 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { parseEther } from "viem";
+import { useAccount } from "wagmi";
 import {
-  CheckCircleIcon,
   ClipboardDocumentListIcon,
   ClockIcon,
   CpuChipIcon,
   PaperAirplaneIcon,
   XMarkIcon,
 } from "@heroicons/react/24/solid";
-import { parseEther } from "viem";
-import { useAccount } from "wagmi";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { notification } from "~~/utils/scaffold-eth";
@@ -38,14 +37,29 @@ const CATEGORY_SKILLS: Record<string, string[]> = {
   "Technical Writing": ["documentation", "technical-writing"],
 };
 
-type AiRating = { task_rating: number; complexity_score: number; reasoning: string };
+type AiRating = {
+  task_rating: number;
+  complexity_score: number;
+  estimated_files: number;
+  estimated_hours: number;
+  reasoning: string;
+  clarity_score: number;
+  clarity_issues: string[];
+};
 
 const COMPLEXITY_LABEL = (score: number) => {
   if (score < 200) return "Trivial";
   if (score < 400) return "Simple";
-  if (score < 600) return "Moderate";
-  if (score < 800) return "Complex";
+  if (score < 550) return "Moderate";
+  if (score < 700) return "Complex";
+  if (score < 850) return "Advanced";
   return "Expert";
+};
+
+const CLARITY_COLOR = (score: number) => {
+  if (score >= 75) return "badge-success";
+  if (score >= 50) return "badge-warning";
+  return "badge-error";
 };
 
 const PostTaskPage = () => {
@@ -250,8 +264,7 @@ const PostTaskPage = () => {
           {/* Extra skills */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-base-content">
-              Additional Skills{" "}
-              <span className="text-base-content/40 font-normal">(comma-separated, optional)</span>
+              Additional Skills <span className="text-base-content/40 font-normal">(comma-separated, optional)</span>
             </label>
             <input
               type="text"
@@ -267,8 +280,8 @@ const PostTaskPage = () => {
           </div>
 
           {/* AI Analysis */}
-          <div className="border border-base-300 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
+          <div className="border border-base-300 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CpuChipIcon className="w-5 h-5 text-primary" />
                 <h2 className="font-semibold text-base-content">AI Task Analysis</h2>
@@ -280,20 +293,52 @@ const PostTaskPage = () => {
             </div>
 
             {aiRating ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="badge badge-lg badge-primary gap-1">
-                    Difficulty: {aiRating.task_rating}/100
+              <>
+                {/* Complexity */}
+                <div>
+                  <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-2">Complexity</p>
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <span className="badge badge-lg badge-primary">Difficulty {aiRating.task_rating}/100</span>
+                    <span className="badge badge-lg badge-secondary">
+                      {COMPLEXITY_LABEL(aiRating.complexity_score)} ({aiRating.complexity_score}/1000)
+                    </span>
+                    <span className="badge badge-lg badge-outline">~{aiRating.estimated_files} files</span>
+                    <span className="badge badge-lg badge-outline">~{aiRating.estimated_hours}h</span>
                   </div>
-                  <div className="badge badge-lg badge-secondary gap-1">
-                    Complexity: {aiRating.complexity_score}/1000 — {COMPLEXITY_LABEL(aiRating.complexity_score)}
-                  </div>
+                  <p className="text-sm text-base-content/70 leading-relaxed">{aiRating.reasoning}</p>
                 </div>
-                <p className="text-sm text-base-content/70 leading-relaxed">{aiRating.reasoning}</p>
-              </div>
+
+                <div className="divider my-1" />
+
+                {/* Clarity */}
+                <div>
+                  <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-2">
+                    Task Clarity
+                  </p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`badge badge-lg ${CLARITY_COLOR(aiRating.clarity_score)}`}>
+                      Clarity {aiRating.clarity_score}/100
+                    </span>
+                    {aiRating.clarity_score >= 75 && (
+                      <span className="text-sm text-success">Description is clear — ready to post</span>
+                    )}
+                  </div>
+                  {aiRating.clarity_issues.length > 0 && (
+                    <ul className="space-y-1">
+                      {aiRating.clarity_issues.map((issue, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-base-content/70">
+                          <span className="text-warning shrink-0 mt-0.5">⚠</span>
+                          {issue}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
             ) : (
               <p className="text-sm text-base-content/40">
-                Click &quot;Analyze Task&quot; to get an AI complexity rating before posting.
+                Click &quot;Analyze Task&quot; to check complexity and whether your description is clear enough for
+                freelancers.
               </p>
             )}
           </div>
@@ -316,7 +361,11 @@ const PostTaskPage = () => {
           {/* Action bar */}
           <div className="flex items-center gap-3 pb-8">
             {needsApproval ? (
-              <button className="btn btn-primary" onClick={handleApprove} disabled={isApproving || !address || budgetWei === 0n}>
+              <button
+                className="btn btn-primary"
+                onClick={handleApprove}
+                disabled={isApproving || !address || budgetWei === 0n}
+              >
                 {isApproving ? <span className="loading loading-spinner loading-xs" /> : null}
                 Approve DWT
               </button>
