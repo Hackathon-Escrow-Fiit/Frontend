@@ -179,7 +179,6 @@ const PostTaskPage = () => {
   const { writeContractAsync: approveToken, isPending: isApproving } = useScaffoldWriteContract({
     contractName: "DecentraToken",
   });
-
   const { writeContractAsync: postJobWrite, isPending: isPosting } = useScaffoldWriteContract({
     contractName: "JobMarketplace",
   });

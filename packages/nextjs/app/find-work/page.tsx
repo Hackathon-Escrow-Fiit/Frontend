@@ -158,7 +158,10 @@ const FindWorkPage: NextPage = () => {
     if (!jobResults) return [];
     return jobResults
       .filter(r => r.status === "success" && r.result != null)
-      .map(r => r.result as unknown as OnChainJob)
+      .map(r => {
+        const raw = r.result as unknown as OnChainJob;
+        return { ...raw, status: Number(raw.status), bidCount: BigInt(String(raw.bidCount)) };
+      })
       .filter(j => j.status === 0); // Open only
   }, [jobResults]);
 

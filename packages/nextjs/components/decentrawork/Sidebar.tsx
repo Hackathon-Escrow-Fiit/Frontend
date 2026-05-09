@@ -9,7 +9,6 @@ import {
   ArrowsRightLeftIcon,
   ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
-  Cog6ToothIcon,
   QuestionMarkCircleIcon,
   ShieldExclamationIcon,
   Squares2X2Icon,
@@ -34,10 +33,7 @@ const mainNav: NavItem[] = [
   { label: "Profile", href: "/profile", Icon: UserCircleIcon },
 ];
 
-const bottomNav: NavItem[] = [
-  { label: "Settings", href: "/settings", Icon: Cog6ToothIcon },
-  { label: "Support", href: "/support", Icon: QuestionMarkCircleIcon },
-];
+const bottomNav: NavItem[] = [{ label: "Support", href: "/support", Icon: QuestionMarkCircleIcon }];
 
 const NavLink = ({ item, active }: { item: NavItem; active: boolean }) => (
   <Link

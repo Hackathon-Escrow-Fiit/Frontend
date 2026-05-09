@@ -41,11 +41,14 @@ export default function BrowseTaskPage() {
   const [bidAmount, setBidAmount] = useState("");
   const [proposal, setProposal] = useState("");
   const [saved, setSaved] = useState(false);
-  const [isClient, setIsClient] = useState(false);
+  const [role, setRole] = useState<"client" | "freelancer" | null>(null);
 
   useEffect(() => {
-    setIsClient(localStorage.getItem("dw_role") === "client");
+    const stored = localStorage.getItem("dw_role");
+    setRole(stored === "freelancer" ? "freelancer" : "client");
   }, []);
+
+  const isClient = role === "client";
 
   // ── Read job from chain ───────────────────────────────────────────────────
 
@@ -91,7 +94,7 @@ export default function BrowseTaskPage() {
 
   // ── Loading / not found ───────────────────────────────────────────────────
 
-  if (isLoading) {
+  if (isLoading || role === null) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-64 gap-3 text-base-content/40">
@@ -116,8 +119,9 @@ export default function BrowseTaskPage() {
   }
 
   const budgetDwt = Number(formatEther(job.budget)).toLocaleString(undefined, { maximumFractionDigits: 2 });
-  const isOwner = address?.toLowerCase() === job.client.toLowerCase();
-  const isOpen = job.status === 0;
+  const isOwner = isClient && address?.toLowerCase() === job.client.toLowerCase();
+  const isOpen = Number(job.status) === 0;
+  const bidCount = Number(job.bidCount);
   const pitchLeft = 500 - proposal.length;
 
   return (
@@ -170,7 +174,7 @@ export default function BrowseTaskPage() {
                     <h2 className="text-lg font-bold text-base-content">Submit Your Bid</h2>
                   </div>
                   <span className="bg-primary/10 text-primary text-xs font-semibold px-3 py-1 rounded-full">
-                    {job.bidCount.toString()} bid{job.bidCount !== 1n ? "s" : ""} so far
+                    {bidCount} bid{bidCount !== 1 ? "s" : ""} so far
                   </span>
                 </div>
 
@@ -262,7 +266,7 @@ export default function BrowseTaskPage() {
                   </div>
                   <div>
                     <p className="text-[10px] text-base-content/40">Bids</p>
-                    <p className="text-sm font-bold text-base-content">{job.bidCount.toString()} submitted</p>
+                    <p className="text-sm font-bold text-base-content">{bidCount} submitted</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
