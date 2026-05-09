@@ -12,3 +12,7 @@ export * from "./useScaffoldWriteContract";
 export * from "./useTargetNetwork";
 export * from "./useTransactor";
 export * from "./useSelectedNetwork";
+export * from "./useEnsName";
+export * from "./useEnsAddress";
+export * from "./useEnsResolver";
+export * from "./useDecentraWorkRegistry";
