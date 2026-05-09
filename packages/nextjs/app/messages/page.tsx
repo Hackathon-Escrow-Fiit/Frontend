@@ -1,11 +1,10 @@
 "use client";
 
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState } from "react";
 import { blo } from "blo";
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
-  ArrowPathIcon,
   ArrowTopRightOnSquareIcon,
   ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
@@ -14,7 +13,6 @@ import {
   EllipsisVerticalIcon,
   FaceSmileIcon,
   FlagIcon,
-  InformationCircleIcon,
   LockClosedIcon,
   MagnifyingGlassIcon,
   PaperAirplaneIcon,
@@ -22,105 +20,12 @@ import {
   PencilSquareIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
+import { useAccount } from "wagmi";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
-
-type Conversation = {
-  id: string;
-  address: `0x${string}`;
-  name: string;
-  preview: string;
-  time: string;
-  taskTitle: string;
-  taskStatus: "IN PROGRESS" | "COMPLETED" | "DISPUTED" | "OPEN";
-};
-
-type Message =
-  | { id: string; kind: "date"; label: string }
-  | { id: string; kind: "system"; text: string }
-  | {
-      id: string;
-      kind: "received";
-      sender: string;
-      senderAddress: `0x${string}`;
-      time: string;
-      text: string;
-      attachment?: { name: string; size: string };
-    }
-  | { id: string; kind: "sent"; time: string; text: string };
-
-const conversations: Conversation[] = [
-  {
-    id: "1",
-    address: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-    name: "cryptodev.eth",
-    preview: "The smart contract audit for th...",
-    time: "10:45 AM",
-    taskTitle: "Smart Contract Audit: Liquidity Locker",
-    taskStatus: "IN PROGRESS",
-  },
-  {
-    id: "2",
-    address: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
-    name: "alice.eth",
-    preview: "I've updated the Figma file with t...",
-    time: "Yesterday",
-    taskTitle: "UI/UX Redesign — Dashboard",
-    taskStatus: "OPEN",
-  },
-  {
-    id: "3",
-    address: "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-    name: "bob.eth",
-    preview: "is the repository public or private?",
-    time: "2 days ago",
-    taskTitle: "Backend API Integration",
-    taskStatus: "OPEN",
-  },
-  {
-    id: "4",
-    address: "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
-    name: "satoshi.eth",
-    preview: "Thanks for the quick turnaround!",
-    time: "May 13",
-    taskTitle: "Tokenomics Whitepaper",
-    taskStatus: "COMPLETED",
-  },
-];
-
-const mockMessages: Message[] = [
-  { id: "d1", kind: "date", label: "Monday, Oct 24" },
-  {
-    id: "m1",
-    kind: "received",
-    sender: "cryptodev.eth",
-    senderAddress: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-    time: "10:24 AM",
-    text: "I've completed the initial vulnerability scan on the `Lock.sol` contract. Found two medium-severity issues regarding the reentrancy protection in the withdraw function. Attaching the draft report now.",
-    attachment: { name: "Audit_Report_Draft_v1.pdf", size: "1.2 MB" },
-  },
-  {
-    id: "m2",
-    kind: "sent",
-    time: "10:45 AM",
-    text: "Thanks for the quick turnaround. Does the reentrancy risk affect the emergency withdrawal function as well? We need to make sure the DAO can still recover funds if the main logic fails.",
-  },
-  { id: "s1", kind: "system", text: 'Freelancer marked 1 task as "In Review"' },
-  {
-    id: "m3",
-    kind: "received",
-    sender: "cryptodev.eth",
-    senderAddress: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-    time: "11:02 AM",
-    text: "Checking that now. It looks like the `emergencyExit` uses a different modifier, but I'll run a specific test suite against it to be 100% sure. Should have the final report by end of day.",
-  },
-];
-
-const statusColors: Record<Conversation["taskStatus"], string> = {
-  "IN PROGRESS": "bg-info/15 text-info",
-  COMPLETED: "bg-success/15 text-success",
-  DISPUTED: "bg-error/15 text-error",
-  OPEN: "bg-base-300 text-base-content/60",
-};
+import type { Dm } from "@xmtp/browser-sdk";
+import { useXmtp } from "~~/hooks/useXmtp";
+import { useXmtpConversations, type XmtpConversation } from "~~/hooks/useXmtpConversations";
+import { useXmtpMessages, type XmtpMessage } from "~~/hooks/useXmtpMessages";
 
 const features = [
   {
@@ -146,28 +51,312 @@ const features = [
   },
 ];
 
-const MessagesPage = () => {
-  const [selected, setSelected] = useState<string | null>(null);
+function formatNs(ns: bigint): string {
+  const date = new Date(Number(ns / 1_000_000n));
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function fallbackAddress(str: string): `0x${string}` {
+  // derive a deterministic hex from the inbox ID for the avatar
+  const hex = str.replace(/[^a-fA-F0-9]/g, "").padEnd(40, "0").slice(0, 40);
+  return `0x${hex}` as `0x${string}`;
+}
+
+// ── New DM modal ──────────────────────────────────────────────────────────────
+function NewDmModal({ onDm, onClose }: { onDm: (address: string) => void; onClose: () => void }) {
+  const [addr, setAddr] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-base-100 rounded-2xl p-6 w-80 shadow-xl">
+        <h3 className="font-bold text-base-content mb-3">New Message</h3>
+        <input
+          autoFocus
+          type="text"
+          placeholder="Recipient address (0x…)"
+          className="input input-bordered w-full text-sm mb-3"
+          value={addr}
+          onChange={e => setAddr(e.target.value)}
+        />
+        <div className="flex gap-2 justify-end">
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-primary btn-sm" disabled={!addr.trim()} onClick={() => onDm(addr.trim())}>
+            Start Chat
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Conversation list item ────────────────────────────────────────────────────
+function ConvoItem({
+  entry,
+  isSelected,
+  onClick,
+}: {
+  entry: XmtpConversation;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const avatarAddr = entry.peerAddress ?? fallbackAddress(entry.id);
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-3 border-b border-base-200 text-left transition-colors ${
+        isSelected ? "bg-primary/10" : "hover:bg-base-200"
+      }`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={blo(avatarAddr)} alt={entry.peerAddress ?? "peer"} className="w-9 h-9 rounded-full shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-sm font-medium text-base-content truncate">
+            {entry.peerAddress ? `${entry.peerAddress.slice(0, 6)}…${entry.peerAddress.slice(-4)}` : entry.id.slice(0, 12)}
+          </span>
+          <span className="text-[10px] text-base-content/40 ml-2 shrink-0">{entry.time}</span>
+        </div>
+        <p className="text-xs text-base-content/50 truncate">{entry.preview || "No messages yet"}</p>
+      </div>
+    </button>
+  );
+}
+
+// ── Single message bubble ─────────────────────────────────────────────────────
+function MessageBubble({ msg, myInboxId }: { msg: XmtpMessage; myInboxId: string }) {
+  const isMine = msg.senderInboxId === myInboxId;
+  const time = formatNs(msg.sentAtNs);
+
+  if (isMine) {
+    return (
+      <div className="flex items-end justify-end gap-3">
+        <div className="max-w-lg">
+          <div className="flex items-center justify-end gap-1.5 mb-1.5">
+            <span className="text-xs text-base-content/40">{time}</span>
+            <span className="text-sm font-semibold text-base-content">You</span>
+          </div>
+          {msg.kind === "text" ? (
+            <div className="bg-base-100 border-2 border-primary rounded-2xl rounded-br-sm px-4 py-3 text-sm text-base-content/80 leading-relaxed shadow-sm">
+              {msg.text}
+            </div>
+          ) : (
+            <AttachmentBubble filename={msg.filename} mimeType={msg.mimeType} content={msg.content} />
+          )}
+        </div>
+        <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0">
+          <UserCircleIcon className="w-5 h-5 text-white" />
+        </div>
+      </div>
+    );
+  }
+
+  const avatarAddr = fallbackAddress(msg.senderInboxId);
+  return (
+    <div className="flex items-start gap-3">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={blo(avatarAddr)} alt="peer" className="w-9 h-9 rounded-full shrink-0 mt-0.5" />
+      <div className="max-w-lg">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <span className="text-sm font-semibold text-base-content">
+            {msg.senderInboxId.slice(0, 8)}…
+          </span>
+          <CheckBadgeIcon className="w-4 h-4 text-primary" />
+          <span className="text-xs text-base-content/40">{time}</span>
+        </div>
+        {msg.kind === "text" ? (
+          <div className="bg-base-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-base-content/80 leading-relaxed shadow-sm">
+            {msg.text}
+          </div>
+        ) : (
+          <AttachmentBubble filename={msg.filename} mimeType={msg.mimeType} content={msg.content} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AttachmentBubble({ filename, mimeType, content }: { filename: string; mimeType: string; content: Uint8Array }) {
+  const download = () => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <div className="bg-base-100 rounded-xl border border-base-200 px-4 py-3 flex items-center gap-3 w-64 shadow-sm">
+      <DocumentTextIcon className="w-5 h-5 text-primary shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-base-content truncate">{filename}</p>
+        <p className="text-[10px] text-base-content/40 mt-0.5">{(content.length / 1024).toFixed(1)} KB</p>
+      </div>
+      <button className="btn btn-ghost btn-xs btn-square" onClick={download}>
+        <ArrowDownTrayIcon className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+// ── Chat panel ────────────────────────────────────────────────────────────────
+function ChatPanel({ entry }: { entry: XmtpConversation }) {
+  const { client } = useXmtp();
+  const { address } = useAccount();
+  const { messages, isLoading, isSending, sendMessage, sendAttachment } = useXmtpMessages(entry.conversation as Dm);
   const [input, setInput] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const myInboxId = client?.inboxId ?? "";
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    const text = input;
+    setInput("");
+    await sendMessage(text);
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await sendAttachment(file);
+    e.target.value = "";
+  };
+
+  const peerDisplay = entry.peerAddress
+    ? `${entry.peerAddress.slice(0, 6)}…${entry.peerAddress.slice(-4)}`
+    : entry.id.slice(0, 12);
+
+  const avatarAddr = entry.peerAddress ?? fallbackAddress(entry.id);
+  const myAddr = (address ?? "0x0000000000000000000000000000000000000000") as `0x${string}`;
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="bg-base-100 border-b border-base-200 px-5 py-3 flex items-center gap-3 shrink-0">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-base-content truncate">{peerDisplay}</h2>
+          </div>
+          <p className="text-xs text-base-content/40 mt-0.5 flex items-center gap-1">
+            <LockClosedIcon className="w-3 h-3" />
+            End-to-end encrypted via XMTP
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex -space-x-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={blo(avatarAddr)} alt="peer" className="w-8 h-8 rounded-full border-2 border-base-100" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={blo(myAddr)} alt="you" className="w-8 h-8 rounded-full border-2 border-base-100" />
+          </div>
+          <button className="btn btn-ghost btn-sm btn-square">
+            <EllipsisVerticalIcon className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 bg-base-200">
+        {isLoading && (
+          <div className="flex justify-center py-8">
+            <span className="loading loading-spinner loading-md text-primary" />
+          </div>
+        )}
+        {!isLoading && messages.length === 0 && (
+          <div className="flex justify-center">
+            <span className="text-xs text-base-content/30">No messages yet. Say hello!</span>
+          </div>
+        )}
+        {messages.map(msg => (
+          <MessageBubble key={msg.id} msg={msg} myInboxId={myInboxId} />
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div className="bg-base-100 border-t border-base-200 shrink-0">
+        <div className="flex items-center gap-3 px-5 py-2.5 border-b border-base-200">
+          <button className="btn btn-outline btn-sm btn-error gap-1.5">
+            <FlagIcon className="w-3.5 h-3.5" />
+            Open Dispute
+          </button>
+          <span className="ml-auto text-xs text-base-content/40 italic">
+            Messages are encrypted end-to-end via XMTP.
+          </span>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-3">
+          <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
+          <button
+            className="btn btn-ghost btn-sm btn-square text-base-content/50"
+            onClick={() => fileRef.current?.click()}
+            disabled={isSending}
+          >
+            <PaperClipIcon className="w-5 h-5" />
+          </button>
+          <input
+            type="text"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Type a message or drop files..."
+            className="flex-1 bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30"
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+          />
+          <button className="btn btn-ghost btn-sm btn-square text-base-content/50">
+            <FaceSmileIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || isSending}
+            className="btn btn-primary btn-sm gap-1.5 px-4"
+          >
+            {isSending ? <span className="loading loading-spinner loading-xs" /> : <PaperAirplaneIcon className="w-4 h-4" />}
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+const MessagesPage = () => {
+  const { address: walletAddress } = useAccount();
+  const { isConnected, isLoading: xmtpLoading, error: xmtpError, connect } = useXmtp();
+  const { conversations, isLoading: convosLoading, createDm } = useXmtpConversations();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [showNewDm, setShowNewDm] = useState(false);
 
-  const conv = conversations.find(c => c.id === selected) ?? null;
+  const selected = conversations.find(c => c.id === selectedId) ?? null;
 
-  const filteredConversations = useMemo(() => {
-    if (!search.trim()) return conversations;
-    const q = search.toLowerCase();
-    return conversations.filter(c => c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q));
-  }, [search]);
+  const filtered = search.trim()
+    ? conversations.filter(
+        c =>
+          c.peerAddress?.toLowerCase().includes(search.toLowerCase()) ||
+          c.preview.toLowerCase().includes(search.toLowerCase()),
+      )
+    : conversations;
+
+  const handleNewDm = async (address: string) => {
+    setShowNewDm(false);
+    const entry = await createDm(address);
+    setSelectedId(entry.id);
+  };
 
   return (
     <AppLayout>
+      {showNewDm && <NewDmModal onDm={handleNewDm} onClose={() => setShowNewDm(false)} />}
       <div className="flex h-full">
         {/* ── Conversation list ── */}
         <div className="w-72 shrink-0 bg-base-100 border-r border-base-200 flex flex-col">
           <div className="flex items-center justify-between px-5 py-4 border-b border-base-200">
             <h2 className="font-bold text-base-content">Messages</h2>
-            <button className="btn btn-ghost btn-sm btn-square">
+            <button className="btn btn-ghost btn-sm btn-square" onClick={() => setShowNewDm(true)}>
               <PencilSquareIcon className="w-4 h-4" />
             </button>
           </div>
@@ -184,203 +373,56 @@ const MessagesPage = () => {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {filteredConversations.map(c => (
-              <button
-                key={c.id}
-                onClick={() => setSelected(c.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 border-b border-base-200 text-left transition-colors ${
-                  selected === c.id ? "bg-primary/10" : "hover:bg-base-200"
-                }`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={blo(c.address)} alt={c.name} className="w-9 h-9 rounded-full shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-sm font-medium text-base-content truncate">{c.name}</span>
-                    <span className="text-[10px] text-base-content/40 ml-2 shrink-0">{c.time}</span>
+            {!isConnected && !xmtpLoading && (
+              <div className="p-4 text-center space-y-2">
+                {!walletAddress ? (
+                  <p className="text-xs text-base-content/50">Connect your wallet first to enable messaging.</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-base-content/50">Enable encrypted messaging with your wallet.</p>
+                    <button className="btn btn-primary btn-sm w-full" onClick={connect}>
+                      Enable Messaging
+                    </button>
+                  </>
+                )}
+                {xmtpError && (
+                  <p className="text-xs text-error bg-error/10 rounded-lg px-3 py-2 text-left">{xmtpError}</p>
+                )}
+              </div>
+            )}
+            {xmtpLoading && (
+              <div className="p-4 text-center space-y-2">
+                <span className="loading loading-spinner loading-sm text-primary" />
+                <p className="text-xs text-base-content/50">Check your wallet for a signature request…</p>
+              </div>
+            )}
+            {isConnected && !xmtpLoading && (
+              <>
+                {convosLoading && (
+                  <div className="flex justify-center py-4">
+                    <span className="loading loading-dots loading-sm text-base-content/30" />
                   </div>
-                  <p className="text-xs text-base-content/50 truncate">{c.preview}</p>
-                </div>
-              </button>
-            ))}
-            {filteredConversations.length === 0 && (
-              <p className="text-xs text-base-content/30 text-center py-6">No conversations found.</p>
+                )}
+                {filtered.map(c => (
+                  <ConvoItem
+                    key={c.id}
+                    entry={c}
+                    isSelected={selectedId === c.id}
+                    onClick={() => setSelectedId(c.id)}
+                  />
+                ))}
+                {!convosLoading && filtered.length === 0 && (
+                  <p className="text-xs text-base-content/30 text-center py-6">No conversations found.</p>
+                )}
+              </>
             )}
           </div>
         </div>
 
         {/* ── Main panel ── */}
-        {conv ? (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Chat header */}
-            <div className="bg-base-100 border-b border-base-200 px-5 py-3 flex items-center gap-3 shrink-0">
-              <button onClick={() => setSelected(null)} className="btn btn-ghost btn-sm btn-square">
-                <ArrowLeftIcon className="w-4 h-4" />
-              </button>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="font-bold text-base-content truncate">{conv.taskTitle}</h2>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusColors[conv.taskStatus]}`}
-                  >
-                    {conv.taskStatus}
-                  </span>
-                </div>
-                <button className="text-xs text-primary flex items-center gap-1 hover:underline mt-0.5">
-                  View Task Details
-                  <ArrowTopRightOnSquareIcon className="w-3 h-3" />
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex -space-x-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={blo(conv.address)}
-                    alt={conv.name}
-                    className="w-8 h-8 rounded-full border-2 border-base-100"
-                  />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={blo("0x90f79bf6eb2c4f870365e785982e1f101e93b906")}
-                    alt="you"
-                    className="w-8 h-8 rounded-full border-2 border-base-100"
-                  />
-                </div>
-                <button className="btn btn-ghost btn-sm btn-square">
-                  <EllipsisVerticalIcon className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 bg-base-200">
-              {mockMessages.map(msg => {
-                if (msg.kind === "date") {
-                  return (
-                    <div key={msg.id} className="flex justify-center">
-                      <span className="bg-base-300 text-base-content/50 text-xs px-3 py-1 rounded-full">
-                        {msg.label}
-                      </span>
-                    </div>
-                  );
-                }
-
-                if (msg.kind === "system") {
-                  return (
-                    <div key={msg.id} className="flex justify-center">
-                      <span className="bg-base-300/70 text-base-content/50 text-xs px-4 py-1.5 rounded-full flex items-center gap-1.5">
-                        <InformationCircleIcon className="w-3.5 h-3.5 shrink-0" />
-                        {msg.text}
-                      </span>
-                    </div>
-                  );
-                }
-
-                if (msg.kind === "received") {
-                  return (
-                    <div key={msg.id} className="flex items-start gap-3">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={blo(msg.senderAddress)}
-                        alt={msg.sender}
-                        className="w-9 h-9 rounded-full shrink-0 mt-0.5"
-                      />
-                      <div className="max-w-lg">
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <span className="text-sm font-semibold text-base-content">{msg.sender}</span>
-                          <CheckBadgeIcon className="w-4 h-4 text-primary" />
-                          <span className="text-xs text-base-content/40">{msg.time}</span>
-                        </div>
-                        <div className="bg-base-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-base-content/80 leading-relaxed shadow-sm">
-                          {msg.text}
-                        </div>
-                        {msg.attachment && (
-                          <div className="mt-2 bg-base-100 rounded-xl border border-base-200 px-4 py-3 flex items-center gap-3 w-64 shadow-sm">
-                            <DocumentTextIcon className="w-5 h-5 text-primary shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-base-content truncate">{msg.attachment.name}</p>
-                              <p className="text-[10px] text-base-content/40 mt-0.5">{msg.attachment.size}</p>
-                            </div>
-                            <button className="btn btn-ghost btn-xs btn-square">
-                              <ArrowDownTrayIcon className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (msg.kind === "sent") {
-                  return (
-                    <div key={msg.id} className="flex items-end justify-end gap-3">
-                      <div className="max-w-lg">
-                        <div className="flex items-center justify-end gap-1.5 mb-1.5">
-                          <span className="text-xs text-base-content/40">{msg.time}</span>
-                          <span className="text-sm font-semibold text-base-content">You (client.eth)</span>
-                        </div>
-                        <div className="bg-base-100 border-2 border-primary rounded-2xl rounded-br-sm px-4 py-3 text-sm text-base-content/80 leading-relaxed shadow-sm">
-                          {msg.text}
-                        </div>
-                      </div>
-                      <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0">
-                        <UserCircleIcon className="w-5 h-5 text-white" />
-                      </div>
-                    </div>
-                  );
-                }
-              })}
-            </div>
-
-            {/* Footer */}
-            <div className="bg-base-100 border-t border-base-200 shrink-0">
-              {/* Action bar */}
-              <div className="flex items-center gap-3 px-5 py-2.5 border-b border-base-200">
-                <button className="btn btn-outline btn-sm btn-error gap-1.5">
-                  <FlagIcon className="w-3.5 h-3.5" />
-                  Open Dispute
-                </button>
-                <button className="btn btn-outline btn-sm gap-1.5">
-                  <ArrowPathIcon className="w-3.5 h-3.5" />
-                  Reopen Task
-                </button>
-                <span className="ml-auto text-xs text-base-content/40 italic">
-                  All conversations are encrypted and stored on-chain.
-                </span>
-              </div>
-              {/* Input bar */}
-              <div className="flex items-center gap-2 px-4 py-3">
-                <button className="btn btn-ghost btn-sm btn-square text-base-content/50">
-                  <PaperClipIcon className="w-5 h-5" />
-                </button>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  placeholder="Type a message or drop files..."
-                  className="flex-1 bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30"
-                  onKeyDown={e => {
-                    if (e.key === "Enter" && input.trim()) setInput("");
-                  }}
-                />
-                <button className="btn btn-ghost btn-sm btn-square text-base-content/50">
-                  <FaceSmileIcon className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (input.trim()) setInput("");
-                  }}
-                  className="btn btn-primary btn-sm gap-1.5 px-4"
-                >
-                  Send
-                  <PaperAirplaneIcon className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
+        {selected ? (
+          <ChatPanel entry={selected} />
         ) : (
-          /* ── Empty state ── */
           <div className="flex-1 flex flex-col bg-base-100">
             <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-5">
@@ -393,7 +435,9 @@ const MessagesPage = () => {
               </p>
               <div className="flex gap-3">
                 <button className="btn btn-outline btn-sm">Browse Tasks</button>
-                <button className="btn btn-outline btn-sm">Start New Chat</button>
+                <button className="btn btn-outline btn-sm" onClick={() => setShowNewDm(true)}>
+                  Start New Chat
+                </button>
               </div>
             </div>
             <div className="px-8 pb-8 grid grid-cols-3 gap-4">
