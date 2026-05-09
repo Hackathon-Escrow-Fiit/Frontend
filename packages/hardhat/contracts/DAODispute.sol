@@ -55,6 +55,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
     uint256 public minimumVoters;
     uint256 public voterRewardBps;           // % of staked tokens to majority voters
     uint256 public minorityReputationPenalty;
+    uint256 public minimumTokensToVote;
 
     mapping(uint256 => Dispute)                   public disputes;
     mapping(uint256 => mapping(address => bool))   public hasVoted;
@@ -72,6 +73,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
     error VotingNotOver();
     error VotingOver();
     error NotEligibleVoter();
+    error InsufficientTokenBalance();
     error AlreadyVoted();
     error DisputeNotFound();
     error DisputeAlreadyExists();
@@ -85,7 +87,8 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         uint256 _votingDuration,
         uint256 _minimumVoters,
         uint256 _voterRewardBps,
-        uint256 _minorityReputationPenalty
+        uint256 _minorityReputationPenalty,
+        uint256 _minimumTokensToVote
     ) {
         _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
         jobMarketplace            = IJobMarketplace(_jobMarketplace);
@@ -96,22 +99,24 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         minimumVoters             = _minimumVoters;
         voterRewardBps            = _voterRewardBps;
         minorityReputationPenalty = _minorityReputationPenalty;
+        minimumTokensToVote       = _minimumTokensToVote;
     }
 
-    // Called by JobMarketplace; DWT tokens already transferred to this contract before this call
-    function initiateDispute(uint256 jobId, address client, uint256 proposedPaymentBps)
+    // Called by JobMarketplace; client must have approved `stakedTokens` to this contract beforehand
+    function initiateDispute(uint256 jobId, address client, uint256 proposedPaymentBps, uint256 stakedTokens)
         external
         onlyRole(MARKETPLACE_ROLE)
     {
         if (disputes[jobId].votingDeadline != 0) revert DisputeAlreadyExists();
+        require(stakedTokens > 0, "DAODispute: stake required");
 
-        uint256 staked = decentraToken.balanceOf(address(this));
+        decentraToken.transferFrom(client, address(this), stakedTokens);
 
         disputes[jobId] = Dispute({
             jobId:              jobId,
             client:             client,
             proposedPaymentBps: proposedPaymentBps,
-            stakedTokens:       staked,
+            stakedTokens:       stakedTokens,
             votingDeadline:     block.timestamp + votingDuration,
             forWeight:          0,
             againstWeight:      0,
@@ -119,7 +124,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
             finalized:          false
         });
 
-        emit DisputeInitiated(jobId, client, proposedPaymentBps, staked);
+        emit DisputeInitiated(jobId, client, proposedPaymentBps, stakedTokens);
     }
 
     // support = true → agree with client (partial pay); false → full pay to freelancer
@@ -129,6 +134,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         if (d.finalized) revert AlreadyFinalized();
         if (block.timestamp >= d.votingDeadline) revert VotingOver();
         if (!reputationSystem.hasCompletedJob(msg.sender)) revert NotEligibleVoter();
+        if (decentraToken.balanceOf(msg.sender) < minimumTokensToVote) revert InsufficientTokenBalance();
         if (hasVoted[jobId][msg.sender]) revert AlreadyVoted();
 
         uint256 weight = _calculateVoteWeight(msg.sender, jobId);
@@ -324,5 +330,9 @@ contract DAODispute is AccessControl, ReentrancyGuard {
 
     function setTreasury(address _treasury) external onlyRole(DEFAULT_ADMIN_ROLE) {
         treasury = _treasury;
+    }
+
+    function setMinimumTokensToVote(uint256 _minimum) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        minimumTokensToVote = _minimum;
     }
 }
