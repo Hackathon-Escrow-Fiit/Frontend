@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   31337: {
     DAODispute: {
-      address: "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE",
+      address: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
       abi: [
         {
           inputs: [
@@ -983,10 +983,10 @@ const deployedContracts = {
         revokeRole: "@openzeppelin/contracts/access/AccessControl.sol",
         supportsInterface: "@openzeppelin/contracts/access/AccessControl.sol",
       },
-      deployedOnBlock: 25,
+      deployedOnBlock: 10,
     },
     DecentraToken: {
-      address: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
+      address: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
       abi: [
         {
           inputs: [
@@ -1722,10 +1722,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 16,
+      deployedOnBlock: 1,
     },
     DecentraWorkRegistry: {
-      address: "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1",
+      address: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
       abi: [
         {
           inputs: [],
@@ -1734,7 +1734,17 @@ const deployedContracts = {
         },
         {
           inputs: [],
+          name: "BioTooLong",
+          type: "error",
+        },
+        {
+          inputs: [],
           name: "InvalidName",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "InvalidRole",
           type: "error",
         },
         {
@@ -1752,6 +1762,19 @@ const deployedContracts = {
           inputs: [
             {
               indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+          ],
+          name: "BioUpdated",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
               internalType: "string",
               name: "name",
               type: "string",
@@ -1761,6 +1784,12 @@ const deployedContracts = {
               internalType: "address",
               name: "owner",
               type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "enum DecentraWorkRegistry.Role",
+              name: "role",
+              type: "uint8",
             },
           ],
           name: "NameRegistered",
@@ -1812,12 +1841,50 @@ const deployedContracts = {
               type: "address",
             },
           ],
+          name: "getBio",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+          ],
           name: "getName",
           outputs: [
             {
               internalType: "string",
               name: "",
               type: "string",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+          ],
+          name: "getRole",
+          outputs: [
+            {
+              internalType: "enum DecentraWorkRegistry.Role",
+              name: "",
+              type: "uint8",
             },
           ],
           stateMutability: "view",
@@ -1849,6 +1916,16 @@ const deployedContracts = {
               name: "name",
               type: "string",
             },
+            {
+              internalType: "enum DecentraWorkRegistry.Role",
+              name: "role",
+              type: "uint8",
+            },
+            {
+              internalType: "string",
+              name: "bio",
+              type: "string",
+            },
           ],
           name: "register",
           outputs: [],
@@ -1862,12 +1939,25 @@ const deployedContracts = {
           stateMutability: "nonpayable",
           type: "function",
         },
+        {
+          inputs: [
+            {
+              internalType: "string",
+              name: "bio",
+              type: "string",
+            },
+          ],
+          name: "setBio",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 31,
+      deployedOnBlock: 32,
     },
     JobMarketplace: {
-      address: "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
+      address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
       abi: [
         {
           inputs: [
@@ -3378,10 +3468,10 @@ const deployedContracts = {
         supportsInterface: "@openzeppelin/contracts/access/AccessControl.sol",
         paused: "@openzeppelin/contracts/utils/Pausable.sol",
       },
-      deployedOnBlock: 20,
+      deployedOnBlock: 5,
     },
     ReputationSystem: {
-      address: "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+      address: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       abi: [
         {
           inputs: [
@@ -3626,6 +3716,25 @@ const deployedContracts = {
           type: "event",
         },
         {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "user",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "newCount",
+              type: "uint256",
+            },
+          ],
+          name: "TasksCompletedIncremented",
+          type: "event",
+        },
+        {
           inputs: [],
           name: "AI_ORACLE_ROLE",
           outputs: [
@@ -3851,6 +3960,25 @@ const deployedContracts = {
         {
           inputs: [
             {
+              internalType: "address",
+              name: "user",
+              type: "address",
+            },
+          ],
+          name: "getTasksCompleted",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
               internalType: "bytes32",
               name: "role",
               type: "bytes32",
@@ -3907,6 +4035,19 @@ const deployedContracts = {
             },
           ],
           stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "user",
+              type: "address",
+            },
+          ],
+          name: "incrementTasksCompleted",
+          outputs: [],
+          stateMutability: "nonpayable",
           type: "function",
         },
         {
@@ -4117,6 +4258,25 @@ const deployedContracts = {
           inputs: [
             {
               internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          name: "tasksCompleted",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
               name: "user",
               type: "address",
             },
@@ -4141,7 +4301,7 @@ const deployedContracts = {
         revokeRole: "@openzeppelin/contracts/access/AccessControl.sol",
         supportsInterface: "@openzeppelin/contracts/access/AccessControl.sol",
       },
-      deployedOnBlock: 18,
+      deployedOnBlock: 3,
     },
   },
 } as const;
