@@ -49,6 +49,7 @@ const SetupPage: NextPage = () => {
     setIsSubmitting(true);
     try {
       await register(ensHandle, role, bio.trim());
+      if (role) localStorage.setItem("dw_role", role);
       notification.success(`Welcome! ${ensHandle}.nexora.eth is yours.`);
       router.push("/dashboard");
     } catch (e) {

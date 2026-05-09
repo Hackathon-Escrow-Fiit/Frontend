@@ -53,15 +53,22 @@ export const Sidebar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { address } = useAccount();
-  const { currentName } = useDecentraWorkRegistry();
+  const { currentName, role: onChainRole } = useDecentraWorkRegistry();
   const [role, setRole] = useState<"client" | "freelancer">("client");
+  const isRoleLocked = !!onChainRole;
 
   useEffect(() => {
+    if (onChainRole) {
+      setRole(onChainRole);
+      localStorage.setItem("dw_role", onChainRole);
+      return;
+    }
     const stored = localStorage.getItem("dw_role");
     if (stored === "freelancer" || stored === "client") setRole(stored);
-  }, []);
+  }, [onChainRole]);
 
   const toggleRole = () => {
+    if (isRoleLocked) return;
     const next = role === "client" ? "freelancer" : "client";
     localStorage.setItem("dw_role", next);
     setRole(next);
@@ -99,19 +106,32 @@ export const Sidebar = () => {
         {bottomNav.map(item => (
           <NavLink key={item.href} item={item} active={isActive(item.href)} />
         ))}
-        <button
-          onClick={toggleRole}
-          className="mt-2 w-full flex items-center justify-between px-3 py-2 rounded-lg bg-base-200 hover:bg-base-300 transition-colors"
-        >
-          <span className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">Role</span>
-          <span
-            className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-              role === "client" ? "bg-info/15 text-info" : "bg-success/15 text-success"
-            }`}
+        {isRoleLocked ? (
+          <div className="mt-2 w-full flex items-center justify-between px-3 py-2 rounded-lg bg-base-200">
+            <span className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">Role</span>
+            <span
+              className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                role === "client" ? "bg-info/15 text-info" : "bg-success/15 text-success"
+              }`}
+            >
+              {role}
+            </span>
+          </div>
+        ) : (
+          <button
+            onClick={toggleRole}
+            className="mt-2 w-full flex items-center justify-between px-3 py-2 rounded-lg bg-base-200 hover:bg-base-300 transition-colors"
           >
-            {role}
-          </span>
-        </button>
+            <span className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">Role</span>
+            <span
+              className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                role === "client" ? "bg-info/15 text-info" : "bg-success/15 text-success"
+              }`}
+            >
+              {role}
+            </span>
+          </button>
+        )}
       </div>
     </aside>
   );

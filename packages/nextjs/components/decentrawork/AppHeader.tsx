@@ -3,11 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { UserCircleIcon } from "@heroicons/react/24/solid";
+import { useDecentraWorkRegistry } from "~~/hooks/scaffold-eth";
 
 export const AppHeader = () => {
   const [role, setRole] = useState<"client" | "freelancer">("client");
+  const { role: onChainRole } = useDecentraWorkRegistry();
 
   useEffect(() => {
+    if (onChainRole) {
+      setRole(onChainRole);
+      return;
+    }
     const stored = localStorage.getItem("dw_role");
     if (stored === "freelancer" || stored === "client") setRole(stored);
 
@@ -18,7 +24,7 @@ export const AppHeader = () => {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [onChainRole]);
 
   const navLinks =
     role === "client"
