@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { blo } from "blo";
-import { useAccount } from "wagmi";
+import { useAccount, useDisconnect } from "wagmi";
 import {
+  ArrowRightOnRectangleIcon,
   BoltIcon,
   CheckBadgeIcon,
   EllipsisHorizontalIcon,
@@ -105,8 +106,10 @@ const getTier = (elo: number): Tier => TIERS.findLast(t => elo >= t.min) ?? TIER
 
 const ProfilePage = () => {
   const [tab, setTab] = useState<Tab>("overview");
+  const [menuOpen, setMenuOpen] = useState(false);
   const { address } = useAccount();
-  const { currentName } = useDecentraWorkRegistry();
+  const { disconnect } = useDisconnect();
+  const { currentName, role, bio, isLoadingBio } = useDecentraWorkRegistry();
 
   const displayAddress = address ?? MOCK_ADDRESS;
   const ensHandle = currentName ? `@${currentName}.nexora.eth` : "@alexrivers.nexora.eth";
@@ -168,9 +171,11 @@ const ProfilePage = () => {
               <div className="mb-1">
                 <div className="flex items-center gap-2 mb-0.5">
                   <h1 className="text-xl font-bold text-base-content">{displayName}</h1>
-                  <span className="badge badge-sm bg-purple-100 text-purple-700 border-purple-200 font-medium">
-                    Freelancer/Client
-                  </span>
+                  {role && (
+                    <span className="badge badge-sm bg-purple-100 text-purple-700 border-purple-200 font-medium capitalize">
+                      {role}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 text-sm text-base-content/50">
                   <span>{ensHandle}</span>
@@ -184,9 +189,31 @@ const ProfilePage = () => {
                 <EnvelopeIcon className="w-4 h-4" />
                 Message
               </button>
-              <button className="btn btn-ghost btn-sm btn-square border border-base-300">
-                <EllipsisHorizontalIcon className="w-4 h-4" />
-              </button>
+              <div className="relative">
+                <button
+                  className="btn btn-ghost btn-sm btn-square border border-base-300"
+                  onClick={() => setMenuOpen(o => !o)}
+                >
+                  <EllipsisHorizontalIcon className="w-4 h-4" />
+                </button>
+                {menuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-20 bg-base-100 border border-base-300 rounded-xl shadow-lg py-1 min-w-[140px]">
+                      <button
+                        onClick={() => {
+                          disconnect();
+                          setMenuOpen(false);
+                        }}
+                        className="flex items-center gap-2 w-full px-4 py-2 text-sm text-error hover:bg-base-200 transition-colors"
+                      >
+                        <ArrowRightOnRectangleIcon className="w-4 h-4" />
+                        Disconnect
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -224,18 +251,14 @@ const ProfilePage = () => {
                 {/* Professional Summary */}
                 <div className="bg-base-100 border border-base-300 rounded-xl p-5">
                   <h2 className="font-bold text-base-content mb-3">Professional Summary</h2>
-                  <p className="text-sm text-base-content/60 leading-relaxed mb-4">
-                    Full-stack engineer and decentralized systems architect with 6+ years of experience in Ethereum,
-                    Solidity, and React. Passionate about building the next generation of labor markets on-chain. I
-                    specialize in complex smart contract auditing and high-performance decentralized frontends.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {["Solidity", "Rust", "Smart Contract Auditing", "TypeScript", "EVM Architecture"].map(skill => (
-                      <span key={skill} className="badge badge-ghost border border-base-300 text-xs font-medium">
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
+
+                  {isLoadingBio && <span className="loading loading-spinner loading-sm text-primary" />}
+
+                  {!isLoadingBio && bio && <p className="text-sm text-base-content/60 leading-relaxed">{bio}</p>}
+
+                  {!isLoadingBio && !bio && (
+                    <p className="text-sm text-base-content/40 italic">No summary provided yet.</p>
+                  )}
                 </div>
 
                 {/* Skill Scores */}
