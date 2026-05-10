@@ -24,7 +24,6 @@ const parseContractError = (error: unknown): string => {
 const SetupPage: NextPage = () => {
   const router = useRouter();
   const [ensHandle, setEnsHandle] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<UserRole>(null);
   const [bio, setBio] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -40,8 +39,8 @@ const SetupPage: NextPage = () => {
     }
   }, [currentName, isLoadingName, router]);
 
-  const currentStep = displayName && role ? 3 : ensHandle ? 2 : 1;
-  const canSubmit = ensHandle.length >= 3 && isAvailable && displayName && role && !isRegistering && !isSubmitting;
+  const currentStep = role ? 3 : ensHandle ? 2 : 1;
+  const canSubmit = ensHandle.length >= 3 && isAvailable && role && !isRegistering && !isSubmitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -153,22 +152,6 @@ const SetupPage: NextPage = () => {
           <div className="mb-8">
             <SectionLabel>Step 3: Personalize</SectionLabel>
 
-            {/* Display name */}
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-full bg-base-200 border-2 border-dashed border-base-300 flex items-center justify-center shrink-0">
-                <svg className="w-6 h-6 text-base-content/30" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                value={displayName}
-                onChange={e => setDisplayName(e.target.value)}
-                className="input input-bordered flex-1 text-sm"
-                placeholder="Your display name"
-              />
-            </div>
-
             {/* Role */}
             <div className="flex gap-2 mb-3">
               <button
@@ -188,7 +171,7 @@ const SetupPage: NextPage = () => {
             {/* Optional bio */}
             <div>
               <p className="text-[10px] text-base-content/40 mb-1.5">
-                Bio <span className="text-base-content/30">(optional — stored on IPFS)</span>
+                Bio <span className="text-base-content/30">(optional)</span>
               </p>
               <textarea
                 value={bio}
