@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { blo } from "blo";
+import { namehash } from "viem/ens";
 import { useAccount, useDisconnect } from "wagmi";
 import {
   ArrowRightOnRectangleIcon,
@@ -12,7 +13,6 @@ import {
   ShieldCheckIcon,
   StarIcon,
 } from "@heroicons/react/24/solid";
-import { namehash } from "viem/ens";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
 import { useDecentraWorkRegistry, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 
@@ -147,25 +147,25 @@ const ProfilePage = () => {
   const { data: ensElo } = useScaffoldReadContract({
     contractName: "NexoraResolver",
     functionName: "text",
-    args: ensNode ? [ensNode, "decentrawork.elo"] : undefined,
+    args: [ensNode, "decentrawork.elo"],
     query: { enabled: !!ensNode },
   });
   const { data: ensTier } = useScaffoldReadContract({
     contractName: "NexoraResolver",
     functionName: "text",
-    args: ensNode ? [ensNode, "decentrawork.tier"] : undefined,
+    args: [ensNode, "decentrawork.tier"],
     query: { enabled: !!ensNode },
   });
   const { data: ensRole } = useScaffoldReadContract({
     contractName: "NexoraResolver",
     functionName: "text",
-    args: ensNode ? [ensNode, "decentrawork.role"] : undefined,
+    args: [ensNode, "decentrawork.role"],
     query: { enabled: !!ensNode },
   });
   const { data: ensBio } = useScaffoldReadContract({
     contractName: "NexoraResolver",
     functionName: "text",
-    args: ensNode ? [ensNode, "decentrawork.bio"] : undefined,
+    args: [ensNode, "decentrawork.bio"],
     query: { enabled: !!ensNode },
   });
 
@@ -435,9 +435,7 @@ const ProfilePage = () => {
                         ENS Profile
                       </p>
                     </div>
-                    <p className="text-xs font-mono text-primary mb-3 truncate">
-                      {currentName}.nexora.eth
-                    </p>
+                    <p className="text-xs font-mono text-primary mb-3 truncate">{currentName}.nexora.eth</p>
                     <div className="flex flex-col gap-2">
                       {[
                         { key: "decentrawork.elo", value: ensElo as string | undefined },
@@ -449,9 +447,7 @@ const ProfilePage = () => {
                           <p className="text-[10px] text-base-content/30 font-mono">{key}</p>
                           {value ? (
                             <p className="text-xs text-base-content/70 truncate font-medium">
-                              {key === "decentrawork.bio" && value.length > 40
-                                ? value.slice(0, 40) + "…"
-                                : value}
+                              {key === "decentrawork.bio" && value.length > 40 ? value.slice(0, 40) + "…" : value}
                             </p>
                           ) : (
                             <p className="text-xs text-base-content/20 italic">resolving…</p>

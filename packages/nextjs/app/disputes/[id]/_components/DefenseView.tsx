@@ -61,18 +61,18 @@ export const DefenseView = ({
   });
 
   const timeline = useMemo(() => {
-    const jobIdBig = BigInt(id);
+    const jobIdBig = /^\d+$/.test(id) ? BigInt(id) : 0n;
     const initiated = (initiatedEvents ?? [])
-      .filter(e => e.args.jobId === jobIdBig)
-      .map(e => ({
+      .filter((e: any) => e.args.jobId === jobIdBig)
+      .map((e: any) => ({
         type: "dispute" as const,
         actor: e.args.client as string,
         text: `Submitted dispute — proposed ${Number(e.args.proposedPaymentBps ?? 0) / 100}% payment to freelancer.`,
         blockNumber: e.blockNumber,
       }));
     const defenses = (defenseEvents ?? [])
-      .filter(e => e.args.jobId === jobIdBig)
-      .map(e => ({
+      .filter((e: any) => e.args.jobId === jobIdBig)
+      .map((e: any) => ({
         type: "defense" as const,
         actor: e.args.freelancer as string,
         text: e.args.statement as string,
@@ -92,7 +92,10 @@ export const DefenseView = ({
       return;
     }
     try {
-      await writeContractAsync({ functionName: "submitDefense", args: [BigInt(id), statement.trim()] });
+      await writeContractAsync({
+        functionName: "submitDefense",
+        args: [/^\d+$/.test(id) ? BigInt(id) : 0n, statement.trim()],
+      });
       notification.success("Defense statement submitted on-chain.");
     } catch (e) {
       notification.error(getParsedError(e));
@@ -103,7 +106,7 @@ export const DefenseView = ({
     ? `${Number(formatEther(dispute.stakedTokens)).toLocaleString(undefined, { maximumFractionDigits: 2 })} NXR`
     : "—";
   const timeDisplay = dispute ? formatTimeRemaining(dispute.votingDeadline, now) : "—";
-  const voterCount = dispute ? Number(dispute.voterCount) : 0;
+  const voterCount = dispute ? Number(dispute.totalVoterCount) : 0;
   const clientAddress = job?.client as `0x${string}` | undefined;
 
   return (
@@ -120,16 +123,8 @@ export const DefenseView = ({
                 {job.client.slice(0, 6)}…{job.client.slice(-4)}
               </span>
               , has initiated a dispute regarding the{" "}
-              <span className="font-semibold text-base-content">&ldquo;{job.title}&rdquo;</span> job. They have proposed
-              paying{" "}
-              <span className="font-semibold text-base-content">
-                {(Number(dispute.proposedPaymentBps) / 100).toFixed(0)}%
-              </span>{" "}
-              of the escrowed amount to the freelancer, with the remaining{" "}
-              <span className="font-semibold text-base-content">
-                {(100 - Number(dispute.proposedPaymentBps) / 100).toFixed(0)}%
-              </span>{" "}
-              returned to the client.
+              <span className="font-semibold text-base-content">&ldquo;{job.title}&rdquo;</span> job. Jurors will review
+              the submitted solutions and vote on the final payment split between the freelancer and client.
             </p>
           ) : (
             <p className="text-sm text-base-content/70 leading-relaxed">Loading dispute details…</p>

@@ -424,17 +424,24 @@ export default function DisputeVotePage() {
 
   const dispute = useMemo(() => {
     if (!rawDispute) return null;
-    const [proposedPaymentBps, , votingDeadline, , , voterCount] = rawDispute as readonly [
-      bigint,
-      bigint,
-      bigint,
-      bigint,
-      bigint,
-      bigint,
-      boolean,
-      string,
-    ];
-    return { proposedPaymentBps, votingDeadline, voterCount };
+    const [
+      stakedTokens,
+      votingDeadline,
+      solutionCount,
+      totalVoterCount,
+      finalized,
+      winningSolutionIndex,
+      defenseStatement,
+    ] = rawDispute as readonly [bigint, bigint, bigint, bigint, boolean, bigint, string];
+    return {
+      stakedTokens,
+      votingDeadline,
+      solutionCount,
+      totalVoterCount,
+      finalized,
+      winningSolutionIndex,
+      defenseStatement,
+    };
   }, [rawDispute]);
 
   const mockDeadline = mockData ? getVotingDeadline(mockData) : undefined;
@@ -482,7 +489,7 @@ export default function DisputeVotePage() {
       return;
     }
     try {
-      await castVote({ functionName: "vote", args: [jobId, support] });
+      await castVote({ functionName: "vote", args: [jobId, support ? 1n : 0n] });
       setVoted(true);
       saveVoted();
       notification.success(support ? "Voted: Reject work (dispute upheld)" : "Voted: Approve work (full pay)");
@@ -525,13 +532,9 @@ export default function DisputeVotePage() {
   const budgetNXR = isMock
     ? mockData!.budgetNXR.toLocaleString()
     : Number(formatEther(job!.budget)).toLocaleString(undefined, { maximumFractionDigits: 2 });
-  const clientProposedPct = isMock
-    ? Math.round((mockData!.proposedPaymentBps / 10000) * 100)
-    : dispute
-      ? Math.round((Number(dispute.proposedPaymentBps) / 10000) * 100)
-      : 0;
+  const clientProposedPct = isMock ? Math.round((mockData!.proposedPaymentBps / 10000) * 100) : 50;
   const clientRefundPct = 100 - clientProposedPct;
-  const voterCount = isMock ? mockData!.voterCount : Number(dispute?.voterCount ?? 0);
+  const voterCount = isMock ? mockData!.voterCount : Number(dispute?.totalVoterCount ?? 0);
   const aiConfidence = isMock ? mockData!.aiConfidence : 82;
   const clientStatement = isMock
     ? mockData!.clientStatement
