@@ -19,9 +19,9 @@ export default function BidSubmittedPage() {
     <AppLayout>
       <div className="p-6">
         {/* Back link */}
-        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mb-4">
+        <Link href="/find-work" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mb-4">
           <ArrowLeftIcon className="w-3.5 h-3.5" />
-          Back to Search
+          Back to Find Work
         </Link>
 
         {/* Title */}

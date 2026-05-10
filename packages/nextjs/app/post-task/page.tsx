@@ -243,7 +243,7 @@ const PostTaskPage = () => {
         args: [title, description, budgetWei, deadlineTs, skills],
       });
       notification.success("Job posted on-chain and budget escrowed!");
-      router.push("/dashboard");
+      router.push("/my-tasks");
     } catch (e) {
       notification.error("Failed to post job");
       console.error(e);
