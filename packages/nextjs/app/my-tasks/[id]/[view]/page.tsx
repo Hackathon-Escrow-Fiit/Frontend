@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { blo } from "blo";
 import { formatEther } from "viem";
-import { useReadContracts } from "wagmi";
+import { useAccount, useReadContracts } from "wagmi";
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
@@ -44,6 +44,7 @@ type OnChainBid = {
 export default function TaskViewPage() {
   const { id, view } = useParams<{ id: string; view: string }>();
   const router = useRouter();
+  const { address } = useAccount();
   const { role: chainRole } = useDecentraWorkRegistry();
   const role: Role = chainRole === "freelancer" ? "freelancer" : "client";
 
@@ -102,6 +103,8 @@ export default function TaskViewPage() {
   const [approveResult] = useState<ApproveResult | null>(null);
   const [, setShowResultModal] = useState(false);
   const [acceptingIndex, setAcceptingIndex] = useState<number | null>(null);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [proposedPct, setProposedPct] = useState(50);
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -265,6 +268,52 @@ export default function TaskViewPage() {
     contractName: "JobMarketplace",
   });
 
+  const { data: disputeStake } = useScaffoldReadContract({
+    contractName: "JobMarketplace",
+    functionName: "disputeStake",
+  });
+
+  const { writeContractAsync: approveToken } = useScaffoldWriteContract({ contractName: "DecentraToken" });
+  const { writeContractAsync: initiateDispute, isPending: isDisputePending } = useScaffoldWriteContract({
+    contractName: "JobMarketplace",
+  });
+
+  const { data: marketplaceInfo } = useDeployedContractInfo({ contractName: "JobMarketplace" });
+
+  const handleOpenDispute = async () => {
+    if (!address || !job) {
+      notification.error("Wallet not connected or job not loaded");
+      return;
+    }
+    if (job.client.toLowerCase() !== address.toLowerCase()) {
+      notification.error("Only the job client can open a dispute");
+      return;
+    }
+    const bps = BigInt(Math.round(proposedPct * 100));
+    if (bps === 0n || bps >= 10000n) {
+      notification.error("Payment % must be between 1% and 99%");
+      return;
+    }
+    try {
+      if (disputeStake && marketplaceInfo) {
+        await approveToken({
+          functionName: "approve",
+          args: [marketplaceInfo.address, disputeStake],
+        });
+      }
+      await initiateDispute({
+        functionName: "initiateDAODispute",
+        args: [jobId, bps],
+      });
+      notification.success("Dispute opened — DAO voting has started.");
+      setShowDisputeModal(false);
+      router.push(`/disputes/${id}/defense`);
+    } catch (e) {
+      notification.error("Failed to open dispute");
+      console.error(e);
+    }
+  };
+
   const handleAccept = async (bidIndex: number) => {
     setAcceptingIndex(bidIndex);
     try {
@@ -274,6 +323,7 @@ export default function TaskViewPage() {
       });
       notification.success("Bid accepted — freelancer has been assigned!");
       refetchBids();
+      router.push(`/my-tasks/${id}/review`);
     } catch (e) {
       notification.error("Failed to accept bid");
       console.error(e);
@@ -764,20 +814,31 @@ export default function TaskViewPage() {
                           <ArrowPathIcon className="w-4 h-4" />
                           Request Changes
                         </button>
-                        <Link
-                          href={`/disputes/${id}/defense`}
-                          className="btn w-full gap-2 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300"
+                        <button
+                          className="btn w-full gap-2 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                          onClick={() => setShowDisputeModal(true)}
+                          disabled={job?.status !== 3}
+                          title={
+                            job?.status !== 3
+                              ? "AI approval must be confirmed on-chain before opening a dispute"
+                              : undefined
+                          }
                         >
                           <ExclamationTriangleIcon className="w-4 h-4" />
-                          Open Dispute
-                        </Link>
+                          Open DAO Dispute
+                        </button>
+                        {job?.status !== 3 && (
+                          <p className="text-[10px] text-base-content/40 text-center">
+                            Waiting for AI decision to confirm on-chain…
+                          </p>
+                        )}
                       </div>
                       <p className="text-[10px] text-base-content/40 leading-relaxed mt-3 text-center">
                         Only use Dispute if direct communication fails.
                       </p>
                     </div>
                   ) : (
-                    /* Freelancer: What Happens Next + View Results */
+                    /* Freelancer: What Happens Next + View Results + Open Dispute */
                     <div className="bg-base-100 rounded-2xl border border-base-200 p-5 space-y-4">
                       <div>
                         <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
@@ -1065,6 +1126,68 @@ export default function TaskViewPage() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Open DAO Dispute Modal ── */}
+        {showDisputeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-base-100 rounded-2xl border border-base-200 shadow-2xl w-full max-w-md mx-4 p-6">
+              <h2 className="text-lg font-bold text-base-content mb-1">Open DAO Dispute</h2>
+              <p className="text-xs text-base-content/50 mb-5">
+                Propose how much of the escrow the freelancer should receive. DAO jurors will vote on the final split.
+              </p>
+              <div className="mb-5">
+                <label className="text-xs font-bold tracking-widest text-base-content/40 uppercase mb-2 block">
+                  Proposed Payment to Freelancer
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min={1}
+                    max={99}
+                    value={proposedPct}
+                    onChange={e => setProposedPct(Number(e.target.value))}
+                    className="range range-primary flex-1"
+                  />
+                  <span className="text-2xl font-bold text-primary w-16 text-right">{proposedPct}%</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-base-content/30 mt-1">
+                  <span>0% (full refund)</span>
+                  <span>100% (full payment)</span>
+                </div>
+              </div>
+              {disputeStake && (
+                <p className="text-xs text-base-content/40 mb-4">
+                  Stake required:{" "}
+                  <span className="font-semibold text-base-content">
+                    {Number(formatEther(disputeStake)).toLocaleString(undefined, { maximumFractionDigits: 2 })} NXR
+                  </span>{" "}
+                  will be deducted from your wallet.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  className="btn btn-ghost flex-1"
+                  onClick={() => setShowDisputeModal(false)}
+                  disabled={isDisputePending}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn flex-1 bg-orange-500 text-white hover:bg-orange-600 border-0 gap-2"
+                  onClick={handleOpenDispute}
+                  disabled={isDisputePending}
+                >
+                  {isDisputePending ? (
+                    <span className="loading loading-spinner loading-xs" />
+                  ) : (
+                    <ExclamationTriangleIcon className="w-4 h-4" />
+                  )}
+                  {isDisputePending ? "Opening…" : "Open Dispute"}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1453,11 +1576,21 @@ export default function TaskViewPage() {
                   </div>
                 )}
                 {hasCounterparty && counterpartyAddr && (
-                  <a
-                    href={`/messages?to=${counterpartyAddr}`}
-                    className="btn btn-outline btn-sm w-full gap-2 mt-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                  <a href={`/messages?to=${counterpartyAddr}`} className="btn btn-outline btn-sm w-full gap-2 mt-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-4 h-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                      />
+                    </svg>
                     Message {isClient ? "Freelancer" : "Client"}
                   </a>
                 )}
@@ -1469,6 +1602,12 @@ export default function TaskViewPage() {
                     <ArrowUpTrayIcon className="w-4 h-4" />
                     Submit Task
                   </button>
+                )}
+                {isClient && (
+                  <Link href={`/my-tasks/${id}/review`} className="btn btn-primary w-full gap-2 mt-2">
+                    <ClockIcon className="w-4 h-4" />
+                    View Submission Review
+                  </Link>
                 )}
               </div>
             </div>
@@ -2007,6 +2146,68 @@ export default function TaskViewPage() {
             );
           })()}
       </div>
+
+      {/* ── Open DAO Dispute Modal ── */}
+      {showDisputeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-base-100 rounded-2xl border border-base-200 shadow-2xl w-full max-w-md mx-4 p-6">
+            <h2 className="text-lg font-bold text-base-content mb-1">Open DAO Dispute</h2>
+            <p className="text-xs text-base-content/50 mb-5">
+              Propose how much of the escrow the freelancer should receive. DAO jurors will vote on the final split.
+            </p>
+            <div className="mb-5">
+              <label className="text-xs font-bold tracking-widest text-base-content/40 uppercase mb-2 block">
+                Proposed Payment to Freelancer
+              </label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min={1}
+                  max={99}
+                  value={proposedPct}
+                  onChange={e => setProposedPct(Number(e.target.value))}
+                  className="range range-primary flex-1"
+                />
+                <span className="text-2xl font-bold text-primary w-16 text-right">{proposedPct}%</span>
+              </div>
+              <div className="flex justify-between text-[10px] text-base-content/30 mt-1">
+                <span>0% (full refund)</span>
+                <span>100% (full payment)</span>
+              </div>
+            </div>
+            {disputeStake && (
+              <p className="text-xs text-base-content/40 mb-4">
+                Stake required:{" "}
+                <span className="font-semibold text-base-content">
+                  {Number(formatEther(disputeStake)).toLocaleString(undefined, { maximumFractionDigits: 2 })} NXR
+                </span>{" "}
+                will be deducted from your wallet.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                className="btn btn-ghost flex-1"
+                onClick={() => setShowDisputeModal(false)}
+                disabled={isDisputePending}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn flex-1 bg-orange-500 text-white hover:bg-orange-600 border-0 gap-2"
+                onClick={handleOpenDispute}
+                disabled={isDisputePending}
+              >
+                {isDisputePending ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  <ExclamationTriangleIcon className="w-4 h-4" />
+                )}
+                {isDisputePending ? "Opening…" : "Open Dispute"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

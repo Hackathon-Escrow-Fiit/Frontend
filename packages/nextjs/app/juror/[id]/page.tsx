@@ -19,12 +19,7 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
-import {
-  CheckCircleIcon as CheckCircleSolid,
-  HandThumbDownIcon,
-  HandThumbUpIcon,
-  XCircleIcon,
-} from "@heroicons/react/24/solid";
+import { CheckCircleIcon as CheckCircleSolid, XCircleIcon } from "@heroicons/react/24/solid";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
 import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { notification } from "~~/utils/scaffold-eth";
@@ -128,25 +123,6 @@ const StatementCard = ({
   </div>
 );
 
-// ── Mock juror deliberations ──────────────────────────────────────────────────
-
-const MOCK_JURORS = [
-  {
-    name: "Juror A",
-    tier: "GOLD TIER",
-    accuracy: "91.2%",
-    reasoning:
-      "I evaluated the deliverables against the contract terms. While the visual quality is superior, the technical omission creates significant rework for the client's team. The AI suggestion seems too high; a lower split is more fair given the compliance risk.",
-  },
-  {
-    name: "Juror B",
-    tier: "SILVER TIER",
-    accuracy: "85.5%",
-    reasoning:
-      "The contractor's argument about redundancy is subjective. Contractually, the scope was fixed. However, the client accepted part of the work without immediate complaint. Supporting the AI recommendation as a balanced outcome.",
-  },
-];
-
 // ── Commit phase view (shown after voting) ────────────────────────────────────
 
 type CommitPhaseProps = {
@@ -182,8 +158,6 @@ const CommitPhaseView = ({
   s,
   onEditReasoning,
 }: CommitPhaseProps) => {
-  const [thumbs, setThumbs] = useState<Record<number, "up" | "down" | null>>({ 0: null, 1: null });
-
   return (
     <>
       <div className="p-6 pb-28 overflow-auto">
@@ -299,52 +273,12 @@ const CommitPhaseView = ({
                 </p>
               </div>
 
-              {/* Other jurors */}
-              {MOCK_JURORS.map((j, i) => (
-                <div key={i} className="bg-base-100 border border-base-200 rounded-2xl p-5 mb-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={blo(`0x${i.toString().padStart(40, "a")}` as `0x${string}`)}
-                        alt=""
-                        className="w-9 h-9 rounded-full shrink-0"
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-base-content">{j.name}</p>
-                          <span className="text-[10px] font-bold text-warning bg-warning/10 border border-warning/20 px-2 py-0.5 rounded-full">
-                            {j.tier}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-base-content/40">{j.accuracy} Accuracy Rating</p>
-                      </div>
-                    </div>
-                    <span className="flex items-center gap-1 text-xs text-base-content/40 border border-base-300 px-2.5 py-1 rounded-full">
-                      <LockClosedIcon className="w-3 h-3" /> Vote Encrypted
-                    </span>
-                  </div>
-                  <p className="text-sm text-base-content/65 leading-relaxed mb-4">{j.reasoning}</p>
-                  <div className="flex items-center justify-between border-t border-base-200 pt-3">
-                    <span className="text-xs text-base-content/40">Helpful reasoning?</span>
-                    <div className="flex gap-2">
-                      {(["up", "down"] as const).map(dir => (
-                        <button
-                          key={dir}
-                          onClick={() => setThumbs(t => ({ ...t, [i]: t[i] === dir ? null : dir }))}
-                          className={`p-1.5 rounded-lg transition-colors ${thumbs[i] === dir ? "bg-primary/10 text-primary" : "text-base-content/30 hover:text-base-content/60"}`}
-                        >
-                          {dir === "up" ? (
-                            <HandThumbUpIcon className="w-4 h-4" />
-                          ) : (
-                            <HandThumbDownIcon className="w-4 h-4" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <div className="bg-base-200/50 border border-base-300 rounded-2xl p-5 text-center">
+                <LockClosedIcon className="w-6 h-6 text-base-content/30 mx-auto mb-2" />
+                <p className="text-sm text-base-content/50">
+                  Other jurors&apos; votes are encrypted until the reveal phase ends.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -453,7 +387,7 @@ export default function JurorDetailPage() {
 
   const dispute = useMemo(() => {
     if (!rawDispute) return null;
-    const [, votingDeadline, , totalVoterCount] = rawDispute as readonly [
+    const [, votingDeadline, solutionCount, totalVoterCount] = rawDispute as readonly [
       bigint,
       bigint,
       bigint,
@@ -462,7 +396,7 @@ export default function JurorDetailPage() {
       bigint,
       string,
     ];
-    return { votingDeadline, voterCount: totalVoterCount };
+    return { votingDeadline, voterCount: totalVoterCount, solutionCount: Number(solutionCount) };
   }, [rawDispute]);
 
   const { data: solution0 } = useScaffoldReadContract({
@@ -514,8 +448,10 @@ export default function JurorDetailPage() {
       return;
     }
     try {
-      // Vote for solution 0 (client's proposal) to uphold dispute; solutionIndex is bigint in new contract
-      await castVote({ functionName: "vote", args: [jobId, 0n] });
+      // support=true → client wins → vote for solution 0 (client's initial proposal)
+      // support=false → freelancer wins → vote for last solution (highest payment to freelancer)
+      const solutionIndex = support ? 0n : BigInt(Math.max(0, (dispute?.solutionCount ?? 1) - 1));
+      await castVote({ functionName: "vote", args: [jobId, solutionIndex] });
       setVoted(true);
       notification.success(support ? "Voted: Reject work (dispute upheld)" : "Voted: Approve work (full pay)");
     } catch (e) {

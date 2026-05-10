@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { MOCK_DISPUTES, getVotingDeadline } from "./mockDisputes";
 import type { NextPage } from "next";
 import { formatEther } from "viem";
 import { useReadContracts } from "wagmi";
@@ -178,47 +177,6 @@ const AccessDenied = ({ onSwitch }: { onSwitch: () => void }) => (
   </div>
 );
 
-// ── Mock dispute card ─────────────────────────────────────────────────────────
-
-const MockDisputeCard = ({ dispute }: { dispute: (typeof MOCK_DISPUTES)[0] }) => {
-  const deadline = getVotingDeadline(dispute);
-  const timeLeft = formatTimeLeft(deadline);
-
-  return (
-    <div className="bg-base-100 border border-base-300 rounded-2xl p-5 hover:border-primary/30 hover:shadow-sm transition-all">
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {dispute.skills.slice(0, 3).map(s => (
-          <span
-            key={s}
-            className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/20"
-          >
-            {s}
-          </span>
-        ))}
-      </div>
-      <h3 className="font-bold text-base-content text-[15px] leading-snug mb-2">{dispute.title}</h3>
-      <p className="text-xs text-base-content/55 leading-relaxed line-clamp-2 mb-5">{dispute.description}</p>
-      <div className="flex items-end justify-between">
-        <div className="flex gap-8">
-          <div>
-            <p className="text-[9px] font-bold tracking-widest text-base-content/40 uppercase mb-1">Dispute Amount</p>
-            <p className="text-sm font-bold text-base-content">{dispute.budgetNXR.toLocaleString()} NXR</p>
-          </div>
-          <div>
-            <p className="text-[9px] font-bold tracking-widest text-base-content/40 uppercase mb-1">Time Left</p>
-            <p className={`text-sm font-bold ${timeLeft.urgent ? "text-error" : "text-base-content"}`}>
-              {timeLeft.text}
-            </p>
-          </div>
-        </div>
-        <Link href={`/juror/${dispute.id}`} className="btn btn-primary btn-sm px-6">
-          View Details
-        </Link>
-      </div>
-    </div>
-  );
-};
-
 // ── Juror portal ──────────────────────────────────────────────────────────────
 
 const JurorPortal = () => {
@@ -228,24 +186,9 @@ const JurorPortal = () => {
 
   const allSkills = useMemo(() => {
     const skills = new Set<string>();
-    MOCK_DISPUTES.forEach(d => d.skills.forEach(s => skills.add(s)));
     chainDisputes.forEach(({ job }) => job.skills.forEach(s => skills.add(s)));
     return ["All", ...Array.from(skills).slice(0, 5)];
   }, [chainDisputes]);
-
-  const filteredMock = useMemo(
-    () =>
-      MOCK_DISPUTES.filter(d => {
-        if (search) {
-          const q = search.toLowerCase();
-          if (!d.title.toLowerCase().includes(q) && !d.description.toLowerCase().includes(q)) return false;
-        }
-        if (activeFilter !== "All" && !d.skills.some(s => s.toLowerCase().includes(activeFilter.toLowerCase())))
-          return false;
-        return true;
-      }),
-    [search, activeFilter],
-  );
 
   const filteredChain = useMemo(
     () =>
@@ -261,7 +204,7 @@ const JurorPortal = () => {
     [chainDisputes, search, activeFilter],
   );
 
-  const totalCount = MOCK_DISPUTES.length + chainDisputes.length;
+  const totalCount = chainDisputes.length;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -301,16 +244,13 @@ const JurorPortal = () => {
 
         {/* Dispute list */}
         <div className="flex-1 overflow-y-auto px-6 pb-6">
-          {filteredMock.length === 0 && filteredChain.length === 0 ? (
+          {filteredChain.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-center gap-3">
               <ScaleIcon className="w-10 h-10 text-base-content/20" />
               <p className="text-sm text-base-content/40">No disputes match your filter.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {filteredMock.map(d => (
-                <MockDisputeCard key={d.id} dispute={d} />
-              ))}
               {!isLoading &&
                 filteredChain.map(({ job, dispute }) => (
                   <DisputeCard key={job.id.toString()} job={job} dispute={dispute} />

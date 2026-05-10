@@ -6,7 +6,6 @@ import type { NextPage } from "next";
 import { formatEther } from "viem";
 import { useReadContracts } from "wagmi";
 import { LockClosedIcon, MagnifyingGlassIcon, ScaleIcon } from "@heroicons/react/24/outline";
-import { MOCK_DISPUTES, getVotingDeadline } from "~~/app/juror/mockDisputes";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
 import { useDecentraWorkRegistry } from "~~/hooks/scaffold-eth";
 import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -171,45 +170,6 @@ const DisputeCard = ({ job, dispute }: { job: OnChainJob; dispute: DisputeData |
   );
 };
 
-const MockDisputeCard = ({ dispute }: { dispute: (typeof MOCK_DISPUTES)[0] }) => {
-  const deadline = getVotingDeadline(dispute);
-  const timeLeft = formatTimeLeft(deadline);
-
-  return (
-    <div className="bg-base-100 border border-base-300 rounded-2xl p-5 hover:border-primary/30 hover:shadow-sm transition-all">
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {dispute.skills.slice(0, 3).map(s => (
-          <span
-            key={s}
-            className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/20"
-          >
-            {s}
-          </span>
-        ))}
-      </div>
-      <h3 className="font-bold text-base-content text-[15px] leading-snug mb-2">{dispute.title}</h3>
-      <p className="text-xs text-base-content/55 leading-relaxed line-clamp-2 mb-5">{dispute.description}</p>
-      <div className="flex items-end justify-between">
-        <div className="flex gap-8">
-          <div>
-            <p className="text-[9px] font-bold tracking-widest text-base-content/40 uppercase mb-1">Dispute Amount</p>
-            <p className="text-sm font-bold text-base-content">{dispute.budgetNXR.toLocaleString()} NXR</p>
-          </div>
-          <div>
-            <p className="text-[9px] font-bold tracking-widest text-base-content/40 uppercase mb-1">Time Left</p>
-            <p className={`text-sm font-bold ${timeLeft.urgent ? "text-error" : "text-base-content"}`}>
-              {timeLeft.text}
-            </p>
-          </div>
-        </div>
-        <Link href={`/disputes/${dispute.id}/vote`} className="btn btn-primary btn-sm px-6">
-          View Details
-        </Link>
-      </div>
-    </div>
-  );
-};
-
 const AccessDenied = () => (
   <div className="flex flex-col items-center justify-center h-full gap-5 text-center px-8">
     <div className="w-20 h-20 rounded-full bg-error/10 flex items-center justify-center">
@@ -254,27 +214,9 @@ const AllDisputesPage: NextPage = () => {
 
   const allSkills = useMemo(() => {
     const skills = new Set<string>();
-    MOCK_DISPUTES.forEach(d => d.skills.forEach(s => skills.add(s)));
     chainDisputes.forEach(({ job }) => job.skills.forEach(s => skills.add(s)));
     return ["All", ...Array.from(skills).slice(0, 5), VOTED_FILTER];
   }, [chainDisputes]);
-
-  const filteredMock = useMemo(
-    () =>
-      MOCK_DISPUTES.filter(d => {
-        if (activeFilter === VOTED_FILTER) return votedIds.has(String(d.id));
-        if (
-          search &&
-          !d.title.toLowerCase().includes(search.toLowerCase()) &&
-          !d.description.toLowerCase().includes(search.toLowerCase())
-        )
-          return false;
-        if (activeFilter !== "All" && !d.skills.some(s => s.toLowerCase().includes(activeFilter.toLowerCase())))
-          return false;
-        return true;
-      }),
-    [search, activeFilter, votedIds],
-  );
 
   const filteredChain = useMemo(
     () =>
@@ -299,9 +241,7 @@ const AllDisputesPage: NextPage = () => {
         <div className="flex-1 flex flex-col overflow-hidden px-6 pt-6">
           <div className="mb-2 shrink-0">
             <h1 className="text-2xl font-bold text-base-content">Active Disputes</h1>
-            <p className="text-sm text-base-content/50 mt-1">
-              {MOCK_DISPUTES.length + chainDisputes.length} cases available.
-            </p>
+            <p className="text-sm text-base-content/50 mt-1">{chainDisputes.length} cases available.</p>
           </div>
 
           <TabBar isFreelancer={role === "freelancer"} />
@@ -335,16 +275,13 @@ const AllDisputesPage: NextPage = () => {
               </div>
 
               <div className="flex-1 overflow-y-auto pb-6">
-                {filteredMock.length === 0 && filteredChain.length === 0 ? (
+                {filteredChain.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 text-center gap-3">
                     <ScaleIcon className="w-10 h-10 text-base-content/20" />
                     <p className="text-sm text-base-content/40">No disputes match your filter.</p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    {filteredMock.map(d => (
-                      <MockDisputeCard key={d.id} dispute={d} />
-                    ))}
                     {!isLoading &&
                       filteredChain.map(({ job, dispute }) => (
                         <DisputeCard key={job.id.toString()} job={job} dispute={dispute} />

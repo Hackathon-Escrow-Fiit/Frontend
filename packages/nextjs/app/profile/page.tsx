@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { blo } from "blo";
 import { namehash } from "viem/ens";
 import { useAccount, useDisconnect } from "wagmi";
+import { useReadContracts } from "wagmi";
 import {
   ArrowRightOnRectangleIcon,
   BoltIcon,
@@ -14,18 +15,11 @@ import {
   StarIcon,
 } from "@heroicons/react/24/solid";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
-import { useDecentraWorkRegistry, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useDecentraWorkRegistry, useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 
 type Tab = "overview" | "history" | "portfolio";
 
 const MOCK_ADDRESS = "0xd8da6bf26964af9d7eed9e03e53415d37aa96045" as const;
-
-const stats = [
-  { label: "COMPLETION RATE", value: "99.2%" },
-  { label: "AVG AI SCORE", value: "4.9/5" },
-  { label: "DISPUTE WIN RATE", value: "100%" },
-  { label: "TOTAL TASKS", value: "142" },
-];
 
 const skillKeys = [
   "Solidity",
@@ -168,6 +162,43 @@ const ProfilePage = () => {
     args: [ensNode, "decentrawork.bio"],
     query: { enabled: !!ensNode },
   });
+
+  // Load all jobs to compute profile stats
+  const { data: marketplaceInfo } = useDeployedContractInfo({ contractName: "JobMarketplace" });
+  const { data: jobCount } = useScaffoldReadContract({ contractName: "JobMarketplace", functionName: "jobCount" });
+
+  const jobCalls = useMemo(() => {
+    if (!marketplaceInfo || !jobCount || jobCount === 0n) return [];
+    return Array.from({ length: Number(jobCount) }, (_, i) => ({
+      address: marketplaceInfo.address as `0x${string}`,
+      abi: marketplaceInfo.abi,
+      functionName: "getJob" as const,
+      args: [BigInt(i + 1)] as const,
+    }));
+  }, [marketplaceInfo, jobCount]);
+
+  const { data: jobResults } = useReadContracts({ contracts: jobCalls, query: { enabled: jobCalls.length > 0 } });
+
+  const profileStats = useMemo(() => {
+    if (!jobResults || !displayAddress) return null;
+    const addr = displayAddress.toLowerCase();
+    const myJobs = jobResults
+      .filter(r => r.status === "success" && r.result != null)
+      .map(r => r.result as any)
+      .filter(j => (j.client as string).toLowerCase() === addr || (j.freelancer as string).toLowerCase() === addr);
+    const asFreelancer = myJobs.filter(j => (j.freelancer as string).toLowerCase() === addr);
+    const completed = asFreelancer.filter(j => Number(j.status) === 5).length;
+    const total = asFreelancer.length;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : null;
+    return { total, completed, completionRate };
+  }, [jobResults, displayAddress]);
+
+  const stats = [
+    { label: "COMPLETION RATE", value: profileStats?.completionRate != null ? `${profileStats.completionRate}%` : "—" },
+    { label: "AVG AI SCORE", value: "—" },
+    { label: "DISPUTE WIN RATE", value: "—" },
+    { label: "TOTAL TASKS", value: profileStats != null ? String(profileStats.total) : "—" },
+  ];
 
   const elo = rawElo != null ? Number(rawElo) : 300;
   const tier = getTier(elo);

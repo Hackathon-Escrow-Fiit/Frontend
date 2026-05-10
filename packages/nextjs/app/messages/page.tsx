@@ -80,7 +80,7 @@ function NewDmModal({ onDm, onClose }: { onDm: (address: string) => void; onClos
   }, [query]);
 
   const looksLikeAddress = isAddress(debounced);
-  const looksLikeName = !looksLikeAddress && debounced.length >= 3;
+  const looksLikeName = debounced.length >= 3 && !looksLikeAddress;
 
   // Name → address lookup
   const { data: resolvedAddr, isLoading: resolvingAddr } = useScaffoldReadContract({
@@ -98,9 +98,7 @@ function NewDmModal({ onDm, onClose }: { onDm: (address: string) => void; onClos
     query: { enabled: looksLikeAddress },
   });
 
-  const finalAddress: string | null = looksLikeAddress
-    ? debounced
-    : (resolvedAddr as string | undefined) ?? null;
+  const finalAddress: string | null = looksLikeAddress ? debounced : ((resolvedAddr as string | undefined) ?? null);
 
   const finalName: string | null = looksLikeAddress
     ? (resolvedName as string | undefined) || null
@@ -109,11 +107,12 @@ function NewDmModal({ onDm, onClose }: { onDm: (address: string) => void; onClos
       : null;
 
   const notFound =
-    looksLikeName && !resolvingAddr && debounced === query.trim() &&
+    looksLikeName &&
+    !resolvingAddr &&
+    debounced === query.trim() &&
     (!finalAddress || finalAddress === "0x0000000000000000000000000000000000000000");
 
-  const canStart =
-    !!finalAddress && finalAddress !== "0x0000000000000000000000000000000000000000";
+  const canStart = !!finalAddress && finalAddress !== "0x0000000000000000000000000000000000000000";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -151,16 +150,18 @@ function NewDmModal({ onDm, onClose }: { onDm: (address: string) => void; onClos
         )}
 
         {notFound && (
-          <p className="text-xs text-error bg-error/10 rounded-lg px-3 py-2 mb-3">
-            No user found with that name.
-          </p>
+          <p className="text-xs text-error bg-error/10 rounded-lg px-3 py-2 mb-3">No user found with that name.</p>
         )}
 
         <div className="flex gap-2 justify-end">
           <button className="btn btn-ghost btn-sm" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn btn-primary btn-sm" disabled={!canStart} onClick={() => canStart && onDm(finalAddress!)}>
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={!canStart}
+            onClick={() => canStart && onDm(finalAddress!)}
+          >
             Start Chat
           </button>
         </div>
@@ -471,7 +472,9 @@ const MessagesPage = () => {
     if (existing) {
       setSelectedId(existing.id);
     } else {
-      createDm(deepLinkTo).then(entry => setSelectedId(entry.id)).catch(() => {});
+      createDm(deepLinkTo)
+        .then(entry => setSelectedId(entry.id))
+        .catch(() => {});
     }
   }, [deepLinkTo, isConnected, convosLoading, conversations, createDm]);
 

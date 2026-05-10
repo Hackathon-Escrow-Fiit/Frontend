@@ -1,88 +1,115 @@
 "use client";
 
+import { useMemo } from "react";
 import { useParams } from "next/navigation";
 import { blo } from "blo";
-import {
-  ArrowTopRightOnSquareIcon,
-  CheckCircleIcon,
-  CodeBracketIcon,
-  DocumentTextIcon,
-  ScaleIcon,
-  ShieldCheckIcon,
-} from "@heroicons/react/24/outline";
+import { formatEther } from "viem";
+import { CheckCircleIcon, ClockIcon, ScaleIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
-
-// ── Mock data (replace with contract reads when DAO indexing is available) ──
-
-const DISPUTE = {
-  caseId: "DR-90210",
-  title: "Technical Dispute: smart-contract-v4-deployment",
-  client: "0x71C4a8b3D6E9f2c1A4e9",
-  clientFull: "0x71C4a8b3D6E9f2c1A4e9" as `0x${string}`,
-  freelancer: "0x2aB7c3D9e1F4b8A6c921",
-  freelancerFull: "0x2aB7c3D9e1F4b8A6c921" as `0x${string}`,
-  escrowTotal: "4,200",
-  token: "NXR",
-  status: "Released" as const,
-
-  clientVotes: 6,
-  freelancerVotes: 3,
-  totalJurors: 9,
-  clientPct: 67,
-
-  consensus:
-    "The consensus reached by the decentralized panel concludes that the smart contract deployment failed to meet the gas efficiency specifications outlined in the original technical scope. A refund of 67% of the total escrowed amount is issued to the Client, with the remaining 33% released to the Freelancer for the research phase completion.",
-
-  clientPayout: "2,814.00",
-  freelancerPayout: "1,386.00",
-  platformFee: "84.00",
-
-  txHash: "0x9d2e8a1f3b7c4d6e2a5f8b3c9b2d1e0f7a4c8e2b",
-  etherscanUrl: "https://etherscan.io/tx/0x9d2e8a1f3b7c4d6e2a5f8b3c9b2d1e0f7a4c8e2b",
-
-  jurors: [
-    {
-      id: "842",
-      vote: "refund" as const,
-      role: "Verified Technical Juror",
-      reasoning:
-        "Analysis of the provided GitHub repository shows that the `gas_limit` constraints were ignored in the final deployment script. While the core logic is sound, the operational costs for the client would be 40% higher than agreed. Refund is justified.",
-    },
-    {
-      id: "119",
-      vote: "release" as const,
-      role: "Senior Engineer",
-      reasoning:
-        "The gas spikes are largely due to current Ethereum mainnet congestion levels rather than inherently flawed code logic. The freelancer delivered functional code that passed all unit tests. I believe the full payment should be released as the external environment is outside their control.",
-    },
-    {
-      id: "374",
-      vote: "refund" as const,
-      role: "Smart Contract Auditor",
-      reasoning:
-        "The specification clearly required gas optimization as a deliverable, not just functional correctness. The 40% cost overrun is material and the client is entitled to a partial refund for the unmet specification.",
-    },
-  ],
-
-  evidence: [
-    { name: "Technical_Spec_v2.pdf", meta: "2.4 MB · Oct 14", icon: "doc" as const },
-    { name: "GitHub Commit History", meta: "github.com/repo/...", icon: "code" as const },
-  ],
-};
-
-const voteBadge = (vote: "refund" | "release") =>
-  vote === "refund" ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200";
-
-const voteLabel = (vote: "refund" | "release") => (vote === "refund" ? "REFUND CLIENT" : "RELEASE PAYMENT");
+import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 
 const truncate = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 
 export default function DisputeResolutionPage() {
-  useParams(); // id used for future contract fetch
-  const d = DISPUTE;
+  const { id } = useParams<{ id: string }>();
+  const jobId = /^\d+$/.test(id ?? "") ? BigInt(id ?? "0") : 0n;
 
-  const clientPct = d.clientPct;
-  const freelancerPct = 100 - clientPct;
+  const { data: rawJob } = useScaffoldReadContract({
+    contractName: "JobMarketplace",
+    functionName: "getJob",
+    args: [jobId],
+    query: { enabled: jobId > 0n },
+  });
+
+  const { data: rawDispute } = useScaffoldReadContract({
+    contractName: "DAODispute",
+    functionName: "getDispute",
+    args: [jobId],
+    query: { enabled: jobId > 0n },
+  });
+
+  const dispute = useMemo(() => {
+    if (!rawDispute) return null;
+    const [, , , totalVoterCount, finalized, winningSolutionIndex, defenseStatement] = rawDispute as readonly [
+      bigint,
+      bigint,
+      bigint,
+      bigint,
+      boolean,
+      bigint,
+      string,
+    ];
+    return { totalVoterCount, finalized, winningSolutionIndex, defenseStatement };
+  }, [rawDispute]);
+
+  const { data: rawWinningSolution } = useScaffoldReadContract({
+    contractName: "DAODispute",
+    functionName: "getSolution",
+    args: [jobId, dispute?.winningSolutionIndex ?? 0n],
+    query: { enabled: jobId > 0n && dispute !== null },
+  });
+
+  const winningSolution = useMemo(() => {
+    if (!rawWinningSolution) return null;
+    const [proposer, paymentBps, description, totalWeight, voterCount] = rawWinningSolution as readonly [
+      `0x${string}`,
+      bigint,
+      string,
+      bigint,
+      bigint,
+    ];
+    return { proposer, paymentBps, description, totalWeight, voterCount };
+  }, [rawWinningSolution]);
+
+  const job = useMemo(() => {
+    if (!rawJob) return null;
+    const r = rawJob as any;
+    return {
+      id: r.id as bigint,
+      client: r.client as `0x${string}`,
+      freelancer: r.freelancer as `0x${string}`,
+      title: r.title as string,
+      budget: r.budget as bigint,
+    };
+  }, [rawJob]);
+
+  const loading = !job || !dispute || !winningSolution;
+
+  // Compute payouts from paymentBps
+  const paymentBps = winningSolution?.paymentBps ?? 0n;
+  const budget = job?.budget ?? 0n;
+  const freelancerAmount = budget > 0n ? (budget * paymentBps) / 10000n : 0n;
+  const clientRefund = budget - freelancerAmount;
+  const freelancerPct = Number(paymentBps) / 100;
+  const clientPct = 100 - freelancerPct;
+
+  const totalVoters = dispute ? Number(dispute.totalVoterCount) : 0;
+
+  const formatNXR = (val: bigint) =>
+    `${Number(formatEther(val)).toLocaleString(undefined, { maximumFractionDigits: 2 })} NXR`;
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-64 gap-3 text-base-content/40">
+          <span className="loading loading-spinner loading-md" />
+          <span className="text-sm">Loading dispute result from blockchain…</span>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!dispute.finalized) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-64 gap-3 text-base-content/40">
+          <ClockIcon className="w-10 h-10 opacity-30" />
+          <p className="text-sm font-semibold">Dispute #{id} has not been finalized yet.</p>
+          <p className="text-xs">Voting is still in progress.</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -91,7 +118,7 @@ export default function DisputeResolutionPage() {
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-2">
             <span className="badge bg-violet-100 text-violet-700 border-violet-200 font-mono text-xs">
-              Case #{d.caseId}
+              Dispute #{id}
             </span>
             <span className="flex items-center gap-1 badge bg-green-100 text-green-700 border-green-200 text-xs">
               <CheckCircleIcon className="w-3.5 h-3.5" />
@@ -102,9 +129,9 @@ export default function DisputeResolutionPage() {
               Nexora DAO Arbitration
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-base-content mb-1">{d.title}</h1>
+          <h1 className="text-2xl font-bold text-base-content mb-1">{job.title}</h1>
           <p className="text-sm text-base-content/50">
-            Arbitration between Client ({truncate(d.client)}) and Freelancer ({truncate(d.freelancer)})
+            Arbitration between Client ({truncate(job.client)}) and Freelancer ({truncate(job.freelancer)})
           </p>
         </div>
 
@@ -118,57 +145,41 @@ export default function DisputeResolutionPage() {
                   <ScaleIcon className="w-5 h-5 text-primary" />
                   <h2 className="font-bold text-base-content text-lg">Final Resolution Outcome</h2>
                 </div>
-                <button className="btn btn-success btn-sm gap-2 text-white">
-                  <CheckCircleIcon className="w-4 h-4" />
-                  Escrow Released
-                </button>
+                <span className="badge bg-green-100 text-green-700 border-green-200">
+                  Solution #{Number(dispute.winningSolutionIndex)}
+                  {dispute.winningSolutionIndex === 0n ? " (Client's Proposal)" : ""}
+                </span>
               </div>
 
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold text-base-content">{clientPct}%</span>
-                  <span className="text-sm text-base-content/50">In Favor of Client</span>
+                  <span className="text-3xl font-bold text-base-content">{freelancerPct.toFixed(0)}%</span>
+                  <span className="text-sm text-base-content/50">Released to Freelancer</span>
                 </div>
-                <span className="text-sm text-base-content/50">{d.totalJurors} Total Jurors</span>
+                <span className="text-sm text-base-content/50">{totalVoters} Total Voters</span>
               </div>
 
               <div className="flex w-full h-3 rounded-full overflow-hidden mb-2">
-                <div className="bg-success transition-all" style={{ width: `${clientPct}%` }} />
-                <div className="bg-error transition-all" style={{ width: `${freelancerPct}%` }} />
+                <div className="bg-primary transition-all" style={{ width: `${freelancerPct}%` }} />
+                <div className="bg-error/40 transition-all" style={{ width: `${clientPct}%` }} />
               </div>
               <div className="flex justify-between text-xs text-base-content/50 mb-5">
-                <span className="text-success font-medium">Full Refund ({d.clientVotes} Votes)</span>
-                <span className="text-error font-medium">Release Payment ({d.freelancerVotes} Votes)</span>
+                <span className="text-primary font-medium">Freelancer ({freelancerPct.toFixed(0)}%)</span>
+                <span className="text-error/70 font-medium">Client Refund ({clientPct.toFixed(0)}%)</span>
               </div>
 
               <blockquote className="border-l-4 border-primary/30 bg-primary/5 rounded-r-xl px-4 py-3">
-                <p className="text-sm text-base-content/70 italic leading-relaxed">&ldquo;{d.consensus}&rdquo;</p>
+                <p className="text-sm text-base-content/70 italic leading-relaxed">{winningSolution.description}</p>
               </blockquote>
             </div>
 
-            {/* Juror Reasoning */}
-            <div>
-              <h2 className="font-bold text-base-content text-lg mb-3">Juror Reasoning Analysis</h2>
-              <div className="flex flex-col gap-3">
-                {d.jurors.map((juror, i) => (
-                  <div key={juror.id} className="bg-base-100 border border-base-300 rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center shrink-0">
-                          J{i + 1}
-                        </div>
-                        <span className="font-semibold text-sm text-base-content">Juror #{juror.id}</span>
-                        <span className={`badge border text-[10px] font-bold ${voteBadge(juror.vote)}`}>
-                          {voteLabel(juror.vote)}
-                        </span>
-                      </div>
-                      <span className="text-xs text-base-content/40">{juror.role}</span>
-                    </div>
-                    <p className="text-sm text-base-content/60 leading-relaxed">{juror.reasoning}</p>
-                  </div>
-                ))}
+            {/* Defense statement */}
+            {dispute.defenseStatement && (
+              <div className="bg-base-100 border border-base-300 rounded-xl p-6">
+                <h2 className="font-bold text-base-content text-lg mb-3">Freelancer&apos;s Defense</h2>
+                <p className="text-sm text-base-content/70 leading-relaxed">{dispute.defenseStatement}</p>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Right column */}
@@ -176,12 +187,10 @@ export default function DisputeResolutionPage() {
             {/* Escrow Total */}
             <div className="bg-base-100 border border-base-300 rounded-xl p-5">
               <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-1">Escrow Total</p>
-              <p className="text-2xl font-bold text-base-content">
-                {d.escrowTotal} <span className="text-primary">{d.token}</span>
-              </p>
+              <p className="text-2xl font-bold text-base-content">{formatNXR(budget)}</p>
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-base-300">
                 <span className="text-sm text-base-content/50">Status</span>
-                <span className="text-sm font-semibold text-success">{d.status}</span>
+                <span className="text-sm font-semibold text-success">Released</span>
               </div>
             </div>
 
@@ -192,74 +201,43 @@ export default function DisputeResolutionPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={blo(d.clientFull)} alt="client" className="w-6 h-6 rounded-full" />
-                    <span className="text-sm text-base-content/70">Client (You)</span>
+                    <img src={blo(job.freelancer)} alt="freelancer" className="w-6 h-6 rounded-full" />
+                    <span className="text-sm text-base-content/70">Freelancer</span>
                   </div>
-                  <span className="text-sm font-bold text-success">
-                    +{d.clientPayout} {d.token}
-                  </span>
+                  <span className="text-sm font-bold text-primary">+{formatNXR(freelancerAmount)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={blo(d.freelancerFull)} alt="freelancer" className="w-6 h-6 rounded-full" />
-                    <span className="text-sm text-base-content/70">Freelancer</span>
+                    <img src={blo(job.client)} alt="client" className="w-6 h-6 rounded-full" />
+                    <span className="text-sm text-base-content/70">Client (Refund)</span>
                   </div>
-                  <span className="text-sm font-semibold text-base-content/70">
-                    +{d.freelancerPayout} {d.token}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-base-300">
-                  <span className="text-xs text-base-content/40">Platform Arbitration Fee</span>
-                  <span className="text-xs text-base-content/50">
-                    -{d.platformFee} {d.token}
-                  </span>
+                  <span className="text-sm font-semibold text-base-content/70">+{formatNXR(clientRefund)}</span>
                 </div>
               </div>
             </div>
 
-            {/* On-Chain Proof */}
+            {/* On-Chain Info */}
             <div className="bg-base-100 border border-base-300 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <ShieldCheckIcon className="w-4 h-4 text-primary" />
-                <h2 className="font-bold text-base-content">On-Chain Proof</h2>
+                <h2 className="font-bold text-base-content">On-Chain Details</h2>
               </div>
-              <div className="flex flex-col gap-3">
-                <div>
-                  <p className="text-[10px] text-base-content/40 uppercase tracking-widest mb-1">Transaction Hash</p>
-                  <p className="text-xs font-mono text-primary break-all">
-                    {d.txHash.slice(0, 10)}...{d.txHash.slice(-10)}
-                  </p>
+              <div className="flex flex-col gap-2 text-xs text-base-content/60">
+                <div className="flex justify-between">
+                  <span>Winning Solution</span>
+                  <span className="font-mono font-semibold text-base-content">
+                    #{Number(dispute.winningSolutionIndex)}
+                  </span>
                 </div>
-                <a
-                  href={d.etherscanUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-sm text-primary hover:underline"
-                >
-                  <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-                  View on Etherscan
-                </a>
-              </div>
-            </div>
-
-            {/* Evidence Snapshot */}
-            <div className="bg-base-100 border border-base-300 rounded-xl p-5">
-              <h2 className="font-bold text-base-content mb-4">Evidence Snapshot</h2>
-              <div className="flex flex-col gap-3">
-                {d.evidence.map(ev => (
-                  <div key={ev.name} className="flex items-center gap-3">
-                    {ev.icon === "doc" ? (
-                      <DocumentTextIcon className="w-5 h-5 text-base-content/40 shrink-0" />
-                    ) : (
-                      <CodeBracketIcon className="w-5 h-5 text-base-content/40 shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm text-base-content/80 truncate">{ev.name}</p>
-                      <p className="text-xs text-base-content/40">{ev.meta}</p>
-                    </div>
-                  </div>
-                ))}
+                <div className="flex justify-between">
+                  <span>Total Voters</span>
+                  <span className="font-semibold text-base-content">{totalVoters}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Freelancer Receives</span>
+                  <span className="font-semibold text-primary">{freelancerPct.toFixed(0)}%</span>
+                </div>
               </div>
             </div>
           </div>
