@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { formatEther } from "viem";
 import { ArrowDownTrayIcon, ArrowLeftIcon, ScaleIcon } from "@heroicons/react/24/outline";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { notification } from "~~/utils/scaffold-eth";
@@ -38,10 +39,13 @@ export const formatTs = (ts: bigint) =>
   });
 
 export const useDisputeData = (id: string) => {
+  const idNum = /^\d+$/.test(id) ? BigInt(id) : 0n;
+
   const { data: rawJob } = useScaffoldReadContract({
     contractName: "JobMarketplace",
     functionName: "getJob",
-    args: [BigInt(id)],
+    args: [idNum],
+    query: { enabled: idNum > 0n },
   });
 
   const job = useMemo<OnChainJob | null>(() => {
@@ -53,29 +57,28 @@ export const useDisputeData = (id: string) => {
   const { data: rawDispute } = useScaffoldReadContract({
     contractName: "DAODispute",
     functionName: "getDispute",
-    args: [BigInt(id)],
+    args: [idNum],
+    query: { enabled: idNum > 0n },
   });
 
   const dispute = useMemo(() => {
     if (!rawDispute) return null;
     const [
-      proposedPaymentBps,
       stakedTokens,
       votingDeadline,
-      forWeight,
-      againstWeight,
-      voterCount,
+      solutionCount,
+      totalVoterCount,
       finalized,
+      winningSolutionIndex,
       defenseStatement,
-    ] = rawDispute as readonly [bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
+    ] = rawDispute as readonly [bigint, bigint, bigint, bigint, boolean, bigint, string];
     return {
-      proposedPaymentBps,
       stakedTokens,
       votingDeadline,
-      forWeight,
-      againstWeight,
-      voterCount,
+      solutionCount,
+      totalVoterCount,
       finalized,
+      winningSolutionIndex,
       defenseStatement,
     };
   }, [rawDispute]);
@@ -101,6 +104,9 @@ export const DisputeHeader = ({
   onScrollToDefense?: () => void;
 }) => {
   const caseId = `#DW-${id.padStart(4, "0")}-FK`;
+  const stakeNxr = dispute
+    ? Number(formatEther(dispute.stakedTokens)).toLocaleString(undefined, { maximumFractionDigits: 2 })
+    : "—";
 
   return (
     <>
@@ -142,21 +148,34 @@ export const DisputeHeader = ({
       </div>
 
       <div className="flex items-center gap-1 mb-6 border-b border-base-300">
-        {(["defense", "vote", "result"] as const)
-          .filter(tab => tab !== "defense" || isFreelancer)
-          .map(tab => (
-            <Link
-              key={tab}
-              href={`/disputes/${id}/${tab}`}
-              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
-                view === tab
-                  ? "border-primary text-primary bg-base-100"
-                  : "border-transparent text-base-content/50 hover:text-base-content hover:bg-base-200"
-              }`}
-            >
-              {tab === "defense" ? "Defense" : tab === "vote" ? "Juror Vote" : "Outcome"}
-            </Link>
-          ))}
+        {(["defense", "vote", "result"] as const).map(tab => (
+          <Link
+            key={tab}
+            href={`/disputes/${id}/${tab}`}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
+              view === tab
+                ? "border-primary text-primary bg-base-100"
+                : "border-transparent text-base-content/50 hover:text-base-content hover:bg-base-200"
+            }`}
+          >
+            {tab === "defense" ? "Defense" : tab === "vote" ? "Juror Vote" : "Outcome"}
+          </Link>
+        ))}
+      </div>
+
+      <div className="bg-base-100 border border-base-300 rounded-2xl p-5 mb-5 grid grid-cols-3 gap-4">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-1">Stake Amount</p>
+          <p className="text-base font-bold text-primary">{stakeNxr} NXR</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-1">Time Remaining</p>
+          <p className="text-base font-bold text-warning">{dispute ? timeRemaining(dispute.votingDeadline) : "—"}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-1">Jurors Voted</p>
+          <p className="text-base font-bold text-base-content">{dispute?.totalVoterCount.toString() ?? "—"}</p>
+        </div>
       </div>
     </>
   );

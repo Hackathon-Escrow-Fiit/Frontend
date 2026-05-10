@@ -453,18 +453,24 @@ export default function JurorDetailPage() {
 
   const dispute = useMemo(() => {
     if (!rawDispute) return null;
-    const [proposedPaymentBps, , votingDeadline, , , voterCount] = rawDispute as readonly [
-      bigint,
-      bigint,
+    const [, votingDeadline, , totalVoterCount] = rawDispute as readonly [
       bigint,
       bigint,
       bigint,
       bigint,
       boolean,
+      bigint,
       string,
     ];
-    return { proposedPaymentBps, votingDeadline, voterCount };
+    return { votingDeadline, voterCount: totalVoterCount };
   }, [rawDispute]);
+
+  const { data: solution0 } = useScaffoldReadContract({
+    contractName: "DAODispute",
+    functionName: "getSolution",
+    args: [jobId, 0n],
+    query: { enabled: jobId > 0n && !isMock },
+  });
 
   const mockDeadline = mockData ? getVotingDeadline(mockData) : undefined;
   const { h, m, s, expired } = useCountdown(isMock ? mockDeadline : dispute?.votingDeadline);
@@ -508,7 +514,8 @@ export default function JurorDetailPage() {
       return;
     }
     try {
-      await castVote({ functionName: "vote", args: [jobId, support] });
+      // Vote for solution 0 (client's proposal) to uphold dispute; solutionIndex is bigint in new contract
+      await castVote({ functionName: "vote", args: [jobId, 0n] });
       setVoted(true);
       notification.success(support ? "Voted: Reject work (dispute upheld)" : "Voted: Approve work (full pay)");
     } catch (e) {
@@ -555,8 +562,8 @@ export default function JurorDetailPage() {
     : Number(formatEther(job!.budget)).toLocaleString(undefined, { maximumFractionDigits: 2 });
   const clientProposedPct = isMock
     ? Math.round((mockData!.proposedPaymentBps / 10000) * 100)
-    : dispute
-      ? Math.round((Number(dispute.proposedPaymentBps) / 10000) * 100)
+    : solution0
+      ? Math.round((Number((solution0 as readonly [unknown, bigint, ...unknown[]])[1]) / 10000) * 100)
       : 0;
   const clientRefundPct = 100 - clientProposedPct;
   const voterCount = isMock ? mockData!.voterCount : Number(dispute?.voterCount ?? 0);
@@ -621,10 +628,7 @@ export default function JurorDetailPage() {
             {expired ? (
               <div className="flex flex-col items-end gap-2">
                 <p className="text-lg font-bold text-error">Voting Ended</p>
-                <Link
-                  href={`/juror/${id}/result`}
-                  className="btn btn-primary btn-xs gap-1"
-                >
+                <Link href={`/juror/${id}/result`} className="btn btn-primary btn-xs gap-1">
                   View Final Result →
                 </Link>
               </div>

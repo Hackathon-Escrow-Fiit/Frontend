@@ -34,17 +34,24 @@ interface IReputationSystem {
 contract DAODispute is AccessControl, ReentrancyGuard {
     bytes32 public constant MARKETPLACE_ROLE = keccak256("MARKETPLACE_ROLE");
 
-    struct Dispute {
-        uint256 jobId;
-        address client;
-        uint256 proposedPaymentBps;
-        uint256 stakedTokens;
-        uint256 votingDeadline;
-        uint256 forWeight;       // votes FOR client proposal (partial pay)
-        uint256 againstWeight;   // votes AGAINST (full pay)
+    // Each proposed resolution
+    struct Solution {
+        address proposer;
+        uint256 paymentBps;    // % of escrow released to freelancer (0–10000)
+        string  description;
+        uint256 totalWeight;
         uint256 voterCount;
-        bool    finalized;
-        string  defenseStatement;
+    }
+
+    struct Dispute {
+        address  client;
+        uint256  stakedTokens;
+        uint256  votingDeadline;
+        uint256  solutionCount;
+        uint256  totalVoterCount;
+        bool     finalized;
+        uint256  winningSolutionIndex;
+        string   defenseStatement;
     }
 
     IJobMarketplace   public jobMarketplace;
@@ -54,19 +61,21 @@ contract DAODispute is AccessControl, ReentrancyGuard {
 
     uint256 public votingDuration;
     uint256 public minimumVoters;
-    uint256 public voterRewardBps;           // % of staked tokens to majority voters
+    uint256 public voterRewardBps;
     uint256 public minorityReputationPenalty;
     uint256 public minimumTokensToVote;
 
-    mapping(uint256 => Dispute)                   public disputes;
-    mapping(uint256 => mapping(address => bool))   public hasVoted;
-    mapping(uint256 => mapping(address => bool))   public votedFor;    // true = voted for client proposal
-    mapping(uint256 => mapping(address => uint256)) public voterWeight;
-    mapping(uint256 => address[])                  public voters;
+    mapping(uint256 => Dispute)                          public disputes;
+    mapping(uint256 => mapping(uint256 => Solution))     public solutions;
+    mapping(uint256 => mapping(address => bool))         public hasVoted;
+    mapping(uint256 => mapping(address => uint256))      public votedForSolution; // solutionIndex voted for
+    mapping(uint256 => mapping(address => uint256))      public voterWeight;
+    mapping(uint256 => address[])                        public voters;
 
     event DisputeInitiated(uint256 indexed jobId, address indexed client, uint256 proposedPaymentBps, uint256 stakedTokens);
-    event VoteCast(uint256 indexed jobId, address indexed voter, bool support, uint256 weight);
-    event DisputeFinalized(uint256 indexed jobId, uint8 outcome, uint256 forWeight, uint256 againstWeight);
+    event SolutionProposed(uint256 indexed jobId, address indexed proposer, uint256 solutionIndex, uint256 paymentBps, string description);
+    event VoteCast(uint256 indexed jobId, address indexed voter, uint256 solutionIndex, uint256 weight);
+    event DisputeFinalized(uint256 indexed jobId, uint256 winningSolutionIndex, uint256 winningPaymentBps, uint256 winningWeight);
     event VoterRewarded(uint256 indexed jobId, address indexed voter, uint256 amount);
     event VoterPenalized(uint256 indexed jobId, address indexed voter, int256 delta);
     event DefenseSubmitted(uint256 indexed jobId, address indexed freelancer, string statement);
@@ -80,6 +89,8 @@ contract DAODispute is AccessControl, ReentrancyGuard {
     error DisputeNotFound();
     error DisputeAlreadyExists();
     error NotFreelancer();
+    error InvalidSolutionIndex();
+    error InvalidPaymentBps();
 
     constructor(
         address defaultAdmin,
@@ -105,59 +116,42 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         minimumTokensToVote       = _minimumTokensToVote;
     }
 
-    // Called by JobMarketplace; client must have approved `stakedTokens` to this contract beforehand
+    // Called by JobMarketplace; creates dispute and adds client's proposal as Solution 0
     function initiateDispute(uint256 jobId, address client, uint256 proposedPaymentBps, uint256 stakedTokens)
         external
         onlyRole(MARKETPLACE_ROLE)
     {
         if (disputes[jobId].votingDeadline != 0) revert DisputeAlreadyExists();
         require(stakedTokens > 0, "DAODispute: stake required");
+        if (proposedPaymentBps > 10000) revert InvalidPaymentBps();
 
         decentraToken.transferFrom(client, address(this), stakedTokens);
 
         disputes[jobId] = Dispute({
-            jobId:              jobId,
-            client:             client,
-            proposedPaymentBps: proposedPaymentBps,
-            stakedTokens:       stakedTokens,
-            votingDeadline:     block.timestamp + votingDuration,
-            forWeight:          0,
-            againstWeight:      0,
-            voterCount:         0,
-            finalized:          false,
-            defenseStatement:   ""
+            client:               client,
+            stakedTokens:         stakedTokens,
+            votingDeadline:       block.timestamp + votingDuration,
+            solutionCount:        1,
+            totalVoterCount:      0,
+            finalized:            false,
+            winningSolutionIndex: 0,
+            defenseStatement:     ""
+        });
+
+        // Solution 0 = client's initial proposal
+        solutions[jobId][0] = Solution({
+            proposer:    client,
+            paymentBps:  proposedPaymentBps,
+            description: "Client's initial proposal",
+            totalWeight: 0,
+            voterCount:  0
         });
 
         emit DisputeInitiated(jobId, client, proposedPaymentBps, stakedTokens);
+        emit SolutionProposed(jobId, client, 0, proposedPaymentBps, "Client's initial proposal");
     }
 
-    // support = true → agree with client (partial pay); false → full pay to freelancer
-    function vote(uint256 jobId, bool support) external {
-        Dispute storage d = disputes[jobId];
-        if (d.votingDeadline == 0) revert DisputeNotFound();
-        if (d.finalized) revert AlreadyFinalized();
-        if (block.timestamp >= d.votingDeadline) revert VotingOver();
-        if (!reputationSystem.hasCompletedJob(msg.sender)) revert NotEligibleVoter();
-        if (decentraToken.balanceOf(msg.sender) < minimumTokensToVote) revert InsufficientTokenBalance();
-        if (hasVoted[jobId][msg.sender]) revert AlreadyVoted();
-
-        uint256 weight = _calculateVoteWeight(msg.sender, jobId);
-
-        hasVoted[jobId][msg.sender]  = true;
-        votedFor[jobId][msg.sender]  = support;
-        voterWeight[jobId][msg.sender] = weight;
-        voters[jobId].push(msg.sender);
-        d.voterCount++;
-
-        if (support) {
-            d.forWeight += weight;
-        } else {
-            d.againstWeight += weight;
-        }
-
-        emit VoteCast(jobId, msg.sender, support, weight);
-    }
-
+    // Freelancer submits defense statement
     function submitDefense(uint256 jobId, string calldata statement) external {
         Dispute storage d = disputes[jobId];
         if (d.votingDeadline == 0) revert DisputeNotFound();
@@ -166,6 +160,65 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         if (msg.sender != job.freelancer) revert NotFreelancer();
         d.defenseStatement = statement;
         emit DefenseSubmitted(jobId, msg.sender, statement);
+    }
+
+    // Any eligible juror (or the freelancer) can propose a resolution
+    function suggestSolution(uint256 jobId, uint256 paymentBps, string calldata description) external {
+        Dispute storage d = disputes[jobId];
+        if (d.votingDeadline == 0) revert DisputeNotFound();
+        if (d.finalized) revert AlreadyFinalized();
+        if (block.timestamp >= d.votingDeadline) revert VotingOver();
+        if (paymentBps > 10000) revert InvalidPaymentBps();
+
+        // Client and freelancer can always suggest; others need eligibility
+        IJobMarketplace.Job memory job = jobMarketplace.getJob(jobId);
+        bool isParty = msg.sender == d.client || msg.sender == job.freelancer;
+        if (!isParty) {
+            if (!reputationSystem.hasCompletedJob(msg.sender)) revert NotEligibleVoter();
+            if (decentraToken.balanceOf(msg.sender) < minimumTokensToVote) revert InsufficientTokenBalance();
+        }
+
+        uint256 idx = d.solutionCount;
+        solutions[jobId][idx] = Solution({
+            proposer:    msg.sender,
+            paymentBps:  paymentBps,
+            description: description,
+            totalWeight: 0,
+            voterCount:  0
+        });
+        d.solutionCount++;
+
+        emit SolutionProposed(jobId, msg.sender, idx, paymentBps, description);
+    }
+
+    // Vote for a specific solution by index
+    function vote(uint256 jobId, uint256 solutionIndex) external {
+        Dispute storage d = disputes[jobId];
+        if (d.votingDeadline == 0) revert DisputeNotFound();
+        if (d.finalized) revert AlreadyFinalized();
+        if (block.timestamp >= d.votingDeadline) revert VotingOver();
+        if (solutionIndex >= d.solutionCount) revert InvalidSolutionIndex();
+
+        // Dispute parties cannot vote
+        IJobMarketplace.Job memory job = jobMarketplace.getJob(jobId);
+        require(msg.sender != d.client && msg.sender != job.freelancer, "DAODispute: party cannot vote");
+
+        if (!reputationSystem.hasCompletedJob(msg.sender)) revert NotEligibleVoter();
+        if (decentraToken.balanceOf(msg.sender) < minimumTokensToVote) revert InsufficientTokenBalance();
+        if (hasVoted[jobId][msg.sender]) revert AlreadyVoted();
+
+        uint256 weight = _calculateVoteWeight(msg.sender, jobId);
+
+        hasVoted[jobId][msg.sender]            = true;
+        votedForSolution[jobId][msg.sender]    = solutionIndex;
+        voterWeight[jobId][msg.sender]         = weight;
+        voters[jobId].push(msg.sender);
+
+        d.totalVoterCount++;
+        solutions[jobId][solutionIndex].totalWeight += weight;
+        solutions[jobId][solutionIndex].voterCount++;
+
+        emit VoteCast(jobId, msg.sender, solutionIndex, weight);
     }
 
     // Callable by anyone after votingDeadline
@@ -177,70 +230,56 @@ contract DAODispute is AccessControl, ReentrancyGuard {
 
         d.finalized = true;
 
-        uint8 outcome;
-        bool  majorityIsFor; // true = majority voted FOR client proposal
-
-        if (d.voterCount < minimumVoters) {
-            // No quorum — confirm full payment (AI decision stands)
-            outcome      = 0;
-            majorityIsFor = false;
-        } else if (d.forWeight > d.againstWeight) {
-            outcome      = 1; // partial pay
-            majorityIsFor = true;
-        } else if (d.againstWeight > d.forWeight) {
-            outcome      = 0; // full pay
-            majorityIsFor = false;
-        } else {
-            outcome      = 2; // tie → 50/50
-            majorityIsFor = false; // no clear majority; skip penalty/reward logic
+        // Find winning solution (highest totalWeight; ties go to lower index)
+        uint256 winningSolutionIndex = 0;
+        uint256 winningWeight = 0;
+        for (uint256 i = 0; i < d.solutionCount; i++) {
+            if (solutions[jobId][i].totalWeight > winningWeight) {
+                winningWeight = solutions[jobId][i].totalWeight;
+                winningSolutionIndex = i;
+            }
         }
 
-        emit DisputeFinalized(jobId, outcome, d.forWeight, d.againstWeight);
+        d.winningSolutionIndex = winningSolutionIndex;
+        Solution storage winner = solutions[jobId][winningSolutionIndex];
 
-        // Callback to JobMarketplace to execute escrow action
-        jobMarketplace.executeDaoOutcome(jobId, outcome, d.proposedPaymentBps);
+        emit DisputeFinalized(jobId, winningSolutionIndex, winner.paymentBps, winningWeight);
 
-        // Distribute rewards only when there is a clear majority (not tie and not no-quorum with 0 voters)
-        if (outcome != 2 && d.voterCount >= minimumVoters) {
-            _distributeRewardsAndPenalties(jobId, majorityIsFor, d.stakedTokens);
+        // No quorum → full payment to freelancer (AI decision overturned; client loses stake)
+        uint8 outcome;
+        if (d.totalVoterCount < minimumVoters) {
+            outcome = 0; // full pay
         } else {
-            // No clear majority or no quorum: return staked tokens to treasury
+            outcome = 1; // partial pay per winning solution
+        }
+
+        jobMarketplace.executeDaoOutcome(jobId, outcome, winner.paymentBps);
+
+        if (d.totalVoterCount >= minimumVoters) {
+            _distributeRewardsAndPenalties(jobId, winningSolutionIndex, d.stakedTokens);
+        } else {
             _transferToken(treasury, d.stakedTokens);
         }
     }
 
-    function _distributeRewardsAndPenalties(
-        uint256 jobId,
-        bool    majorityIsFor,
-        uint256 staked
-    ) internal {
+    function _distributeRewardsAndPenalties(uint256 jobId, uint256 winningSolutionIndex, uint256 staked) internal {
         address[] storage voterList = voters[jobId];
         uint256 len = voterList.length;
-
-        // Calculate total weight of majority side
-        uint256 majorityTotalWeight = 0;
-        for (uint256 i = 0; i < len; i++) {
-            address v = voterList[i];
-            if (votedFor[jobId][v] == majorityIsFor) {
-                majorityTotalWeight += voterWeight[jobId][v];
-            }
-        }
+        uint256 winningWeight = solutions[jobId][winningSolutionIndex].totalWeight;
 
         uint256 rewardPool     = (staked * voterRewardBps) / 10000;
         uint256 treasuryAmount = staked - rewardPool;
 
-        // Reward majority voters proportionally to their weight
-        if (majorityTotalWeight > 0) {
+        if (winningWeight > 0) {
             for (uint256 i = 0; i < len; i++) {
                 address v = voterList[i];
-                if (votedFor[jobId][v] == majorityIsFor) {
-                    uint256 reward = (rewardPool * voterWeight[jobId][v]) / majorityTotalWeight;
+                if (votedForSolution[jobId][v] == winningSolutionIndex) {
+                    uint256 reward = (rewardPool * voterWeight[jobId][v]) / winningWeight;
                     if (reward > 0) {
                         _transferToken(v, reward);
                         emit VoterRewarded(jobId, v, reward);
                     }
                 } else {
-                    // Minority: apply reputation penalty
                     int256 penalty = -int256(minorityReputationPenalty);
                     reputationSystem.updateReputation(v, penalty);
                     emit VoterPenalized(jobId, v, penalty);
@@ -251,11 +290,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         if (treasuryAmount > 0) _transferToken(treasury, treasuryAmount);
     }
 
-    function _calculateVoteWeight(address voter, uint256 jobId)
-        internal
-        view
-        returns (uint256)
-    {
+    function _calculateVoteWeight(address voter, uint256 jobId) internal view returns (uint256) {
         uint256 rep    = reputationSystem.getReputation(voter);
         uint256 weight = _sqrt(rep);
 
@@ -272,7 +307,6 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         return weight;
     }
 
-    // Babylonian integer square root
     function _sqrt(uint256 x) internal pure returns (uint256 y) {
         if (x == 0) return 0;
         uint256 z = (x + 1) / 2;
@@ -290,11 +324,7 @@ contract DAODispute is AccessControl, ReentrancyGuard {
 
     // ─── Views ────────────────────────────────────────────────────────────────
 
-    function calculateVoteWeight(address voter, uint256 jobId)
-        external
-        view
-        returns (uint256)
-    {
+    function calculateVoteWeight(address voter, uint256 jobId) external view returns (uint256) {
         return _calculateVoteWeight(voter, jobId);
     }
 
@@ -302,27 +332,40 @@ contract DAODispute is AccessControl, ReentrancyGuard {
         external
         view
         returns (
-            uint256 proposedPaymentBps,
             uint256 stakedTokens,
             uint256 votingDeadline,
-            uint256 forWeight,
-            uint256 againstWeight,
-            uint256 voterCount,
+            uint256 solutionCount,
+            uint256 totalVoterCount,
             bool    finalized,
+            uint256 winningSolutionIndex,
             string memory defenseStatement
         )
     {
         Dispute storage d = disputes[jobId];
         return (
-            d.proposedPaymentBps,
             d.stakedTokens,
             d.votingDeadline,
-            d.forWeight,
-            d.againstWeight,
-            d.voterCount,
+            d.solutionCount,
+            d.totalVoterCount,
             d.finalized,
+            d.winningSolutionIndex,
             d.defenseStatement
         );
+    }
+
+    function getSolution(uint256 jobId, uint256 solutionIndex)
+        external
+        view
+        returns (
+            address proposer,
+            uint256 paymentBps,
+            string memory description,
+            uint256 totalWeight,
+            uint256 voterCount
+        )
+    {
+        Solution storage s = solutions[jobId][solutionIndex];
+        return (s.proposer, s.paymentBps, s.description, s.totalWeight, s.voterCount);
     }
 
     // ─── Admin Config ─────────────────────────────────────────────────────────
@@ -350,5 +393,9 @@ contract DAODispute is AccessControl, ReentrancyGuard {
 
     function setMinimumTokensToVote(uint256 _minimum) external onlyRole(DEFAULT_ADMIN_ROLE) {
         minimumTokensToVote = _minimum;
+    }
+
+    function setDAODisputeAddress(address _daoDispute) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        // placeholder for future upgrades
     }
 }
