@@ -422,8 +422,22 @@ export default function TaskViewPage() {
                 </div>
               )}
 
-              {/* Report ready */}
-              {isDone && report && (
+              {/* Report ready — freelancer sees simplified "sent to client" notice */}
+              {isDone && report && !isClient && (
+                <div className="bg-base-100 rounded-2xl border border-base-200 p-12 flex flex-col items-center text-center">
+                  <div className="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center mb-5">
+                    <CheckCircleIcon className="w-10 h-10 text-success" />
+                  </div>
+                  <h2 className="text-xl font-bold text-base-content mb-2">Review complete</h2>
+                  <p className="text-sm text-base-content/50 max-w-sm">
+                    The AI has evaluated your submission and sent the report to the client. You&apos;ll be notified
+                    once they make a decision.
+                  </p>
+                </div>
+              )}
+
+              {/* Report ready — client sees full report */}
+              {isDone && report && isClient && (
                 <>
                   {/* Verdict banner */}
                   {recStyle && (
@@ -1289,13 +1303,15 @@ export default function TaskViewPage() {
                       </>
                     )}
                   </div>
-                  <button
-                    className="btn btn-outline btn-sm gap-2 shrink-0"
-                    onClick={() => !isClient && router.push(`/my-tasks/${id}/upload`)}
-                  >
-                    <ArrowPathIcon className="w-4 h-4" />
-                    {isClient ? "Request Update" : "Submit Work"}
-                  </button>
+                  {!isClient && (
+                    <button
+                      className="btn btn-primary btn-sm gap-2 shrink-0"
+                      onClick={() => router.push(`/my-tasks/${id}/waiting`)}
+                    >
+                      <ArrowUpTrayIcon className="w-4 h-4" />
+                      Submit Work
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1843,9 +1859,33 @@ export default function TaskViewPage() {
                 <div className="w-60 shrink-0 space-y-3">
                   <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
                     <h2 className="text-xs font-bold tracking-widest text-base-content/60 uppercase mb-4">
-                      Review Actions
+                      {isClient ? "Review Actions" : "Submission Status"}
                     </h2>
-                    {noSubmission || isEvaluating ? (
+                    {!isClient ? (
+                      /* Freelancer: can't take actions, just shows status */
+                      <div className="space-y-3">
+                        {noSubmission ? (
+                          <div className="rounded-xl bg-base-200 p-4 text-center">
+                            <p className="text-xs text-base-content/50 leading-relaxed">
+                              No submission yet. Go to the <strong>Waiting</strong> tab to submit your work.
+                            </p>
+                          </div>
+                        ) : isEvaluating ? (
+                          <div className="flex items-center gap-2 bg-warning/10 rounded-xl p-4">
+                            <span className="loading loading-spinner loading-xs text-warning shrink-0" />
+                            <p className="text-xs text-warning font-semibold">AI is evaluating your submission…</p>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 bg-success/10 rounded-xl p-4">
+                            <CheckCircleIcon className="w-4 h-4 text-success shrink-0 mt-0.5" />
+                            <p className="text-xs text-success font-semibold leading-relaxed">
+                              Review sent to client. Waiting for their decision.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : noSubmission || isEvaluating ? (
+                      /* Client: submission not ready yet */
                       <div className="space-y-2">
                         <div className="rounded-xl border-2 border-dashed border-base-300 p-4 text-center mb-1">
                           <p className="text-xs text-base-content/40 leading-relaxed">
@@ -1871,6 +1911,7 @@ export default function TaskViewPage() {
                         </button>
                       </div>
                     ) : (
+                      /* Client: report ready, show action buttons */
                       <div className="space-y-2">
                         <button
                           className="btn btn-primary w-full gap-2 h-14 text-sm"
@@ -1902,9 +1943,11 @@ export default function TaskViewPage() {
                         </Link>
                       </div>
                     )}
-                    <p className="text-[10px] text-base-content/40 leading-relaxed mt-3 text-center">
-                      Only use Dispute if direct communication fails.
-                    </p>
+                    {isClient && (
+                      <p className="text-[10px] text-base-content/40 leading-relaxed mt-3 text-center">
+                        Only use Dispute if direct communication fails.
+                      </p>
+                    )}
                   </div>
 
                   {isReady && (report?.code_issues ?? []).length > 0 && (

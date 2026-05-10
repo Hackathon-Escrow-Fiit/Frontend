@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   31337: {
     DAODispute: {
-      address: "0x51A1ceB83B83F1985a81C295d1fF28Afef186E02",
+      address: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
       abi: [
         {
           inputs: [
@@ -113,6 +113,16 @@ const deployedContracts = {
         },
         {
           inputs: [],
+          name: "InvalidPaymentBps",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "InvalidSolutionIndex",
+          type: "error",
+        },
+        {
+          inputs: [],
           name: "NotEligibleVoter",
           type: "error",
         },
@@ -172,20 +182,20 @@ const deployedContracts = {
             },
             {
               indexed: false,
-              internalType: "uint8",
-              name: "outcome",
-              type: "uint8",
-            },
-            {
-              indexed: false,
               internalType: "uint256",
-              name: "forWeight",
+              name: "winningSolutionIndex",
               type: "uint256",
             },
             {
               indexed: false,
               internalType: "uint256",
-              name: "againstWeight",
+              name: "winningPaymentBps",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "winningWeight",
               type: "uint256",
             },
           ],
@@ -310,14 +320,51 @@ const deployedContracts = {
             {
               indexed: true,
               internalType: "address",
+              name: "proposer",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "solutionIndex",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "paymentBps",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "description",
+              type: "string",
+            },
+          ],
+          name: "SolutionProposed",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "jobId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "address",
               name: "voter",
               type: "address",
             },
             {
               indexed: false,
-              internalType: "bool",
-              name: "support",
-              type: "bool",
+              internalType: "uint256",
+              name: "solutionIndex",
+              type: "uint256",
             },
             {
               indexed: false,
@@ -453,19 +500,9 @@ const deployedContracts = {
           name: "disputes",
           outputs: [
             {
-              internalType: "uint256",
-              name: "jobId",
-              type: "uint256",
-            },
-            {
               internalType: "address",
               name: "client",
               type: "address",
-            },
-            {
-              internalType: "uint256",
-              name: "proposedPaymentBps",
-              type: "uint256",
             },
             {
               internalType: "uint256",
@@ -479,23 +516,23 @@ const deployedContracts = {
             },
             {
               internalType: "uint256",
-              name: "forWeight",
+              name: "solutionCount",
               type: "uint256",
             },
             {
               internalType: "uint256",
-              name: "againstWeight",
-              type: "uint256",
-            },
-            {
-              internalType: "uint256",
-              name: "voterCount",
+              name: "totalVoterCount",
               type: "uint256",
             },
             {
               internalType: "bool",
               name: "finalized",
               type: "bool",
+            },
+            {
+              internalType: "uint256",
+              name: "winningSolutionIndex",
+              type: "uint256",
             },
             {
               internalType: "string",
@@ -571,6 +608,25 @@ const deployedContracts = {
         {
           inputs: [
             {
+              internalType: "bytes32",
+              name: "role",
+              type: "bytes32",
+            },
+          ],
+          name: "getRoleAdmin",
+          outputs: [
+            {
+              internalType: "bytes32",
+              name: "",
+              type: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
               internalType: "uint256",
               name: "jobId",
               type: "uint256",
@@ -607,25 +663,6 @@ const deployedContracts = {
               internalType: "uint256",
               name: "voterCount",
               type: "uint256",
-            },
-          ],
-          stateMutability: "view",
-          type: "function",
-        },
-        {
-          inputs: [
-            {
-              internalType: "bytes32",
-              name: "role",
-              type: "bytes32",
-            },
-          ],
-          name: "getRoleAdmin",
-          outputs: [
-            {
-              internalType: "bytes32",
-              name: "",
-              type: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -829,6 +866,19 @@ const deployedContracts = {
         {
           inputs: [
             {
+              internalType: "address",
+              name: "_daoDispute",
+              type: "address",
+            },
+          ],
+          name: "setDAODisputeAddress",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
               internalType: "uint256",
               name: "_minimum",
               type: "uint256",
@@ -908,6 +958,50 @@ const deployedContracts = {
           inputs: [
             {
               internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          name: "solutions",
+          outputs: [
+            {
+              internalType: "address",
+              name: "proposer",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "paymentBps",
+              type: "uint256",
+            },
+            {
+              internalType: "string",
+              name: "description",
+              type: "string",
+            },
+            {
+              internalType: "uint256",
+              name: "totalWeight",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "voterCount",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
               name: "jobId",
               type: "uint256",
             },
@@ -918,6 +1012,29 @@ const deployedContracts = {
             },
           ],
           name: "submitDefense",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "jobId",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "paymentBps",
+              type: "uint256",
+            },
+            {
+              internalType: "string",
+              name: "description",
+              type: "string",
+            },
+          ],
+          name: "suggestSolution",
           outputs: [],
           stateMutability: "nonpayable",
           type: "function",
@@ -994,29 +1111,6 @@ const deployedContracts = {
             },
           ],
           stateMutability: "view",
-          type: "function",
-        },
-        {
-          inputs: [
-            {
-              internalType: "uint256",
-              name: "jobId",
-              type: "uint256",
-            },
-            {
-              internalType: "uint256",
-              name: "paymentBps",
-              type: "uint256",
-            },
-            {
-              internalType: "string",
-              name: "description",
-              type: "string",
-            },
-          ],
-          name: "suggestSolution",
-          outputs: [],
-          stateMutability: "nonpayable",
           type: "function",
         },
         {
@@ -1103,10 +1197,10 @@ const deployedContracts = {
         revokeRole: "@openzeppelin/contracts/access/AccessControl.sol",
         supportsInterface: "@openzeppelin/contracts/access/AccessControl.sol",
       },
-      deployedOnBlock: 100,
+      deployedOnBlock: 10,
     },
     DecentraToken: {
-      address: "0x4826533B4897376654Bb4d4AD88B7faFD0C98528",
+      address: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
       abi: [
         {
           inputs: [
@@ -1842,10 +1936,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 56,
+      deployedOnBlock: 1,
     },
     DecentraWorkRegistry: {
-      address: "0xf4B146FbA71F41E0592668ffbF264F1D186b2Ca8",
+      address: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
       abi: [
         {
           inputs: [],
@@ -2179,10 +2273,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 106,
+      deployedOnBlock: 16,
     },
     JobMarketplace: {
-      address: "0x0E801D84Fa97b50751Dbf25036d067dCf18858bF",
+      address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
       abi: [
         {
           inputs: [
@@ -3693,10 +3787,10 @@ const deployedContracts = {
         supportsInterface: "@openzeppelin/contracts/access/AccessControl.sol",
         paused: "@openzeppelin/contracts/utils/Pausable.sol",
       },
-      deployedOnBlock: 60,
+      deployedOnBlock: 5,
     },
     NexoraResolver: {
-      address: "0x4EE6eCAD1c2Dae9f525404De8555724e3c35d07B",
+      address: "0x9A676e781A523b5d0C0e43731313A708CB607508",
       abi: [
         {
           inputs: [
@@ -3848,10 +3942,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 109,
+      deployedOnBlock: 21,
     },
     ReputationSystem: {
-      address: "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",
+      address: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       abi: [
         {
           inputs: [
@@ -4681,10 +4775,10 @@ const deployedContracts = {
         revokeRole: "@openzeppelin/contracts/access/AccessControl.sol",
         supportsInterface: "@openzeppelin/contracts/access/AccessControl.sol",
       },
-      deployedOnBlock: 58,
+      deployedOnBlock: 3,
     },
     TokenSale: {
-      address: "0x04C89607413713Ec9775E14b954286519d836FEf",
+      address: "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
       abi: [
         {
           inputs: [
@@ -4899,7 +4993,7 @@ const deployedContracts = {
         renounceOwnership: "@openzeppelin/contracts/access/Ownable.sol",
         transferOwnership: "@openzeppelin/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 89,
+      deployedOnBlock: 18,
     },
   },
 } as const;
