@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { parseEther } from "viem";
-import { useAccount } from "wagmi";
+import { parseEther, parseEventLogs } from "viem";
+import { useAccount, usePublicClient } from "wagmi";
 import {
   ClipboardDocumentListIcon,
   ClockIcon,
@@ -168,6 +168,7 @@ const PostTaskPage = () => {
 
   const { data: marketplaceInfo } = useDeployedContractInfo({ contractName: "JobMarketplace" });
   const marketplaceAddress = marketplaceInfo?.address;
+  const publicClient = usePublicClient();
 
   const { data: allowance, refetch: refetchAllowance } = useScaffoldReadContract({
     contractName: "DecentraToken",
@@ -238,11 +239,38 @@ const PostTaskPage = () => {
       : BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 3600);
 
     try {
-      await postJobWrite({
+      const txHash = await postJobWrite({
         functionName: "postJob",
         args: [title, description, budgetWei, deadlineTs, skills],
       });
       notification.success("Job posted on-chain and budget escrowed!");
+
+      // Save the AI task rating with the real job ID (parsed from the JobPosted event)
+      if (txHash && aiRating && publicClient && marketplaceInfo?.abi) {
+        try {
+          const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          const logs = parseEventLogs({
+            abi: marketplaceInfo.abi,
+            eventName: "JobPosted",
+            logs: receipt.logs,
+          });
+          const jobId = logs[0]?.args?.jobId;
+          if (jobId !== undefined) {
+            await fetch(`${BACKEND_URL}/rate-task`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                escrow_id: String(jobId),
+                task_description: `${title}\n\n${description}`,
+                required_skills: skills,
+              }),
+            });
+          }
+        } catch (e) {
+          console.error("Failed to save task rating:", e);
+        }
+      }
+
       router.push("/my-tasks");
     } catch (e) {
       notification.error("Failed to post job");
