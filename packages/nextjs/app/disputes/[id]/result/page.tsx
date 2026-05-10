@@ -1,7 +1,9 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { DisputeHeader, useDisputeData } from "../_components/shared";
 import { blo } from "blo";
+import { useAccount } from "wagmi";
 import {
   ArrowTopRightOnSquareIcon,
   CheckCircleIcon,
@@ -17,10 +19,8 @@ import { AppLayout } from "~~/components/decentrawork/AppLayout";
 const DISPUTE = {
   caseId: "DR-90210",
   title: "Technical Dispute: smart-contract-v4-deployment",
-  client: "0x71C4a8b3D6E9f2c1A4e9",
-  clientFull: "0x71C4a8b3D6E9f2c1A4e9" as `0x${string}`,
-  freelancer: "0x2aB7c3D9e1F4b8A6c921",
-  freelancerFull: "0x2aB7c3D9e1F4b8A6c921" as `0x${string}`,
+  client: "0x71C4a8b3D6E9f2c1A4e9" as `0x${string}`,
+  freelancer: "0x2aB7c3D9e1F4b8A6c921" as `0x${string}`,
   escrowTotal: "4,200",
   token: "NXR",
   status: "Released" as const,
@@ -77,51 +77,30 @@ const voteLabel = (vote: "refund" | "release") => (vote === "refund" ? "REFUND C
 
 const truncate = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 
-export default function DisputeResolutionPage() {
-  useParams(); // id used for future contract fetch
-  const d = DISPUTE;
+export default function DisputeResultPage() {
+  const { id } = useParams<{ id: string }>();
+  const { address } = useAccount();
+  const { job, dispute } = useDisputeData(id);
 
+  const isFreelancer = !!(address && job && job.freelancer.toLowerCase() === address.toLowerCase());
+
+  const d = DISPUTE;
   const clientPct = d.clientPct;
   const freelancerPct = 100 - clientPct;
 
   return (
     <AppLayout>
-      <div className="flex-1 overflow-y-auto px-8 py-8 max-w-6xl mx-auto w-full">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="badge bg-violet-100 text-violet-700 border-violet-200 font-mono text-xs">
-              Case #{d.caseId}
-            </span>
-            <span className="flex items-center gap-1 badge bg-green-100 text-green-700 border-green-200 text-xs">
-              <CheckCircleIcon className="w-3.5 h-3.5" />
-              Resolution Finalized
-            </span>
-            <span className="flex items-center gap-1 badge bg-primary/10 text-primary border-primary/20 text-xs">
-              <ScaleIcon className="w-3 h-3" />
-              Nexora DAO Arbitration
-            </span>
-          </div>
-          <h1 className="text-2xl font-bold text-base-content mb-1">{d.title}</h1>
-          <p className="text-sm text-base-content/50">
-            Arbitration between Client ({truncate(d.client)}) and Freelancer ({truncate(d.freelancer)})
-          </p>
-        </div>
+      <div className="px-6 py-8 w-full">
+        <DisputeHeader id={id} view="result" job={job} dispute={dispute} isFreelancer={isFreelancer} />
 
         <div className="flex gap-5 items-start">
           {/* Left column */}
           <div className="flex-1 min-w-0 flex flex-col gap-5">
             {/* Final Resolution Outcome */}
             <div className="bg-base-100 border border-base-300 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <ScaleIcon className="w-5 h-5 text-primary" />
-                  <h2 className="font-bold text-base-content text-lg">Final Resolution Outcome</h2>
-                </div>
-                <button className="btn btn-success btn-sm gap-2 text-white">
-                  <CheckCircleIcon className="w-4 h-4" />
-                  Escrow Released
-                </button>
+              <div className="flex items-center gap-2 mb-4">
+                <ScaleIcon className="w-5 h-5 text-primary" />
+                <h2 className="font-bold text-base-content text-lg">Final Resolution Outcome</h2>
               </div>
 
               <div className="flex items-center justify-between mb-2">
@@ -192,8 +171,8 @@ export default function DisputeResolutionPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={blo(d.clientFull)} alt="client" className="w-6 h-6 rounded-full" />
-                    <span className="text-sm text-base-content/70">Client (You)</span>
+                    <img src={blo(d.client)} alt="client" className="w-6 h-6 rounded-full" />
+                    <span className="text-sm text-base-content/70">Client {truncate(d.client)}</span>
                   </div>
                   <span className="text-sm font-bold text-success">
                     +{d.clientPayout} {d.token}
@@ -202,8 +181,8 @@ export default function DisputeResolutionPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={blo(d.freelancerFull)} alt="freelancer" className="w-6 h-6 rounded-full" />
-                    <span className="text-sm text-base-content/70">Freelancer</span>
+                    <img src={blo(d.freelancer)} alt="freelancer" className="w-6 h-6 rounded-full" />
+                    <span className="text-sm text-base-content/70">Freelancer {truncate(d.freelancer)}</span>
                   </div>
                   <span className="text-sm font-semibold text-base-content/70">
                     +{d.freelancerPayout} {d.token}
@@ -245,7 +224,10 @@ export default function DisputeResolutionPage() {
 
             {/* Evidence Snapshot */}
             <div className="bg-base-100 border border-base-300 rounded-xl p-5">
-              <h2 className="font-bold text-base-content mb-4">Evidence Snapshot</h2>
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircleIcon className="w-4 h-4 text-primary" />
+                <h2 className="font-bold text-base-content">Evidence Snapshot</h2>
+              </div>
               <div className="flex flex-col gap-3">
                 {d.evidence.map(ev => (
                   <div key={ev.name} className="flex items-center gap-3">

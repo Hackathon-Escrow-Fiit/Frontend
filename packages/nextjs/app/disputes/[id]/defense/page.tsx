@@ -1,10 +1,10 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useAccount } from "wagmi";
-import { AppLayout } from "~~/components/decentrawork/AppLayout";
 import { DefenseView } from "../_components/DefenseView";
 import { DisputeHeader, useDisputeData } from "../_components/shared";
+import { useAccount } from "wagmi";
+import { AppLayout } from "~~/components/decentrawork/AppLayout";
 
 export default function DefensePage() {
   const { id } = useParams<{ id: string }>();
