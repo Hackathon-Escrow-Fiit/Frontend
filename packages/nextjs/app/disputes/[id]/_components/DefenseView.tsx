@@ -44,16 +44,16 @@ export const DefenseView = ({
   const timeline = useMemo(() => {
     const jobIdBig = BigInt(id);
     const initiated = (initiatedEvents ?? [])
-      .filter(e => e.args.jobId === jobIdBig)
-      .map(e => ({
+      .filter((e: any) => e.args.jobId === jobIdBig)
+      .map((e: any) => ({
         type: "dispute" as const,
         actor: e.args.client as string,
         text: `Dispute initiated — proposed ${Number(e.args.proposedPaymentBps ?? 0) / 100}% payment to freelancer`,
         blockNumber: e.blockNumber,
       }));
     const defenses = (defenseEvents ?? [])
-      .filter(e => e.args.jobId === jobIdBig)
-      .map(e => ({
+      .filter((e: any) => e.args.jobId === jobIdBig)
+      .map((e: any) => ({
         type: "defense" as const,
         actor: e.args.freelancer as string,
         text: e.args.statement as string,
