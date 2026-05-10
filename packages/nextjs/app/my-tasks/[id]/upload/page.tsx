@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
@@ -13,6 +13,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
+import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { notification } from "~~/utils/scaffold-eth";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
@@ -26,6 +27,24 @@ export default function UploadWorkPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { address } = useAccount();
+
+  const jobId = useMemo(() => (/^\d+$/.test(id) ? BigInt(id) : 0n), [id]);
+
+  const { data: rawJob } = useScaffoldReadContract({
+    contractName: "JobMarketplace",
+    functionName: "getJob",
+    args: [jobId],
+  });
+
+  const job = useMemo(() => {
+    if (!rawJob) return null;
+    const r = rawJob as unknown as {
+      description: string;
+      skills: readonly string[];
+      title: string;
+    };
+    return { description: r.description, skills: Array.from(r.skills), title: r.title };
+  }, [rawJob]);
 
   const [files, setFiles] = useState<File[]>([]);
   const [notes, setNotes] = useState("");
@@ -58,8 +77,11 @@ export default function UploadWorkPage() {
       const form = new FormData();
       form.append("escrow_id", id);
       form.append("freelancer_address", address);
-      form.append("customer_task", notes.trim() || "Complete the assigned task as described in the job posting.");
-      form.append("required_skills", JSON.stringify(["solidity", "smart-contracts"]));
+      const customerTask =
+        job?.description || notes.trim() || "Complete the assigned task as described in the job posting.";
+      const requiredSkills = job?.skills?.length ? job.skills : ["solidity", "smart-contracts"];
+      form.append("customer_task", customerTask);
+      form.append("required_skills", JSON.stringify(requiredSkills));
       files.forEach(f => form.append("files", f, f.name));
 
       const res = await fetch(`${BACKEND_URL}/evaluate`, { method: "POST", body: form });
@@ -100,7 +122,9 @@ export default function UploadWorkPage() {
               </span>
               <span className="text-xs text-base-content/40 font-mono">Task #{id}</span>
             </div>
-            <h1 className="text-xl font-bold text-base-content mt-0.5">Submit Completed Work for AI Review</h1>
+            <h1 className="text-xl font-bold text-base-content mt-0.5">
+              {job?.title ? job.title : "Submit Completed Work for AI Review"}
+            </h1>
           </div>
         </div>
 
