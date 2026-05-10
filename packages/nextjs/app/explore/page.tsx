@@ -3,14 +3,14 @@
 import { useMemo, useState } from "react";
 import { blo } from "blo";
 import type { NextPage } from "next";
+import { useReadContracts } from "wagmi";
 import { BoltIcon } from "@heroicons/react/24/outline";
 import { CheckBadgeIcon, FunnelIcon, MagnifyingGlassIcon, StarIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
+import { useDeployedContractInfo, useScaffoldEventHistory } from "~~/hooks/scaffold-eth";
 
 type Tier = "entry" | "rising" | "skilled" | "expert" | "elite";
-type Category = "all" | "web3" | "design" | "writing" | "backend" | "mobile";
-type Availability = "any" | "available" | "busy";
-type SortBy = "rating" | "elo_desc" | "rate_asc" | "rate_desc" | "jobs_desc";
+type SortBy = "rating" | "elo_desc" | "jobs_desc";
 
 type Freelancer = {
   id: string;
@@ -21,187 +21,10 @@ type Freelancer = {
   elo: number;
   rating: number;
   totalRatings: number;
-  hourlyRate: number;
   jobsDone: number;
   skills: string[];
-  category: Category;
-  available: boolean;
-  verified: boolean;
   topSkillScore: { skill: string; score: number };
 };
-
-const MOCK_FREELANCERS: Freelancer[] = [
-  {
-    id: "1",
-    address: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
-    name: "vitalik.eth",
-    title: "Smart Contract Architect",
-    tier: "elite",
-    elo: 2340,
-    rating: 4.9,
-    totalRatings: 87,
-    hourlyRate: 220,
-    jobsDone: 142,
-    skills: ["Solidity", "EVM", "Security", "Ethereum"],
-    category: "web3",
-    available: true,
-    verified: true,
-    topSkillScore: { skill: "Solidity", score: 10 },
-  },
-  {
-    id: "2",
-    address: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
-    name: "alice.eth",
-    title: "UI/UX Designer & Web3 Front",
-    tier: "expert",
-    elo: 1820,
-    rating: 4.7,
-    totalRatings: 54,
-    hourlyRate: 130,
-    jobsDone: 89,
-    skills: ["Figma", "React", "UI/UX", "Tailwind"],
-    category: "design",
-    available: true,
-    verified: true,
-    topSkillScore: { skill: "Figma", score: 9 },
-  },
-  {
-    id: "3",
-    address: "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-    name: "rustacean.eth",
-    title: "Backend & Protocol Engineer",
-    tier: "skilled",
-    elo: 1450,
-    rating: 4.5,
-    totalRatings: 31,
-    hourlyRate: 95,
-    jobsDone: 47,
-    skills: ["Rust", "Node.js", "IPFS", "The Graph"],
-    category: "backend",
-    available: false,
-    verified: true,
-    topSkillScore: { skill: "Rust", score: 9 },
-  },
-  {
-    id: "4",
-    address: "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
-    name: "scribe.eth",
-    title: "Web3 Technical Writer",
-    tier: "rising",
-    elo: 950,
-    rating: 4.3,
-    totalRatings: 22,
-    hourlyRate: 55,
-    jobsDone: 28,
-    skills: ["Technical Writing", "DAO", "Documentation"],
-    category: "writing",
-    available: true,
-    verified: false,
-    topSkillScore: { skill: "Technical Writing", score: 8 },
-  },
-  {
-    id: "5",
-    address: "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
-    name: "mobilex.eth",
-    title: "React Native & WalletConnect",
-    tier: "expert",
-    elo: 1710,
-    rating: 4.8,
-    totalRatings: 43,
-    hourlyRate: 160,
-    jobsDone: 65,
-    skills: ["React Native", "WalletConnect", "iOS", "Swift"],
-    category: "mobile",
-    available: true,
-    verified: true,
-    topSkillScore: { skill: "React Native", score: 9 },
-  },
-  {
-    id: "6",
-    address: "0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc",
-    name: "graphdev.eth",
-    title: "Subgraph & Indexing Specialist",
-    tier: "skilled",
-    elo: 1280,
-    rating: 4.4,
-    totalRatings: 18,
-    hourlyRate: 85,
-    jobsDone: 34,
-    skills: ["The Graph", "GraphQL", "AssemblyScript"],
-    category: "web3",
-    available: false,
-    verified: true,
-    topSkillScore: { skill: "GraphQL", score: 8 },
-  },
-  {
-    id: "7",
-    address: "0x976ea74026e726554db657fa54763abd0c3a0aa9",
-    name: "aacoder.eth",
-    title: "ERC-4337 & Account Abstraction",
-    tier: "expert",
-    elo: 1640,
-    rating: 4.6,
-    totalRatings: 29,
-    hourlyRate: 145,
-    jobsDone: 51,
-    skills: ["ERC-4337", "Solidity", "Bundler", "Paymaster"],
-    category: "web3",
-    available: true,
-    verified: true,
-    topSkillScore: { skill: "ERC-4337", score: 9 },
-  },
-  {
-    id: "8",
-    address: "0x14dc79964da2c08b23698b3d3cc7ca32193d9955",
-    name: "brandme.eth",
-    title: "Brand & Visual Identity",
-    tier: "rising",
-    elo: 880,
-    rating: 4.1,
-    totalRatings: 15,
-    hourlyRate: 60,
-    jobsDone: 19,
-    skills: ["Branding", "Figma", "Illustration", "Web3"],
-    category: "design",
-    available: true,
-    verified: false,
-    topSkillScore: { skill: "Illustration", score: 7 },
-  },
-  {
-    id: "9",
-    address: "0x23618e81e3f5cdf7f54c3d65f7fbc0abf5b21e8f",
-    name: "datadao.eth",
-    title: "On-Chain Analytics & React",
-    tier: "skilled",
-    elo: 1380,
-    rating: 4.5,
-    totalRatings: 26,
-    hourlyRate: 100,
-    jobsDone: 38,
-    skills: ["React", "Viem", "TypeScript", "Analytics"],
-    category: "web3",
-    available: true,
-    verified: true,
-    topSkillScore: { skill: "TypeScript", score: 8 },
-  },
-  {
-    id: "10",
-    address: "0xa0ee7a142d267c1f36714e4a8f75612f20a79720",
-    name: "newcoder.eth",
-    title: "Junior Solidity Developer",
-    tier: "entry",
-    elo: 520,
-    rating: 3.8,
-    totalRatings: 8,
-    hourlyRate: 35,
-    jobsDone: 9,
-    skills: ["Solidity", "Hardhat", "JavaScript"],
-    category: "web3",
-    available: true,
-    verified: false,
-    topSkillScore: { skill: "Solidity", score: 5 },
-  },
-];
 
 const TIER_CONFIG: Record<Tier, { label: string; color: string; bg: string }> = {
   entry: { label: "Entry", color: "text-slate-600", bg: "bg-slate-100" },
@@ -211,72 +34,105 @@ const TIER_CONFIG: Record<Tier, { label: string; color: string; bg: string }> = 
   elite: { label: "Elite", color: "text-rose-600", bg: "bg-rose-100" },
 };
 
-const CATEGORIES: { key: Category; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "web3", label: "Web3" },
-  { key: "design", label: "Design" },
-  { key: "writing", label: "Writing" },
-  { key: "backend", label: "Backend" },
-  { key: "mobile", label: "Mobile" },
-];
-
 const SORT_OPTIONS: { key: SortBy; label: string }[] = [
   { key: "rating", label: "Top Rated" },
   { key: "elo_desc", label: "Highest Elo" },
-  { key: "rate_desc", label: "Rate: High → Low" },
-  { key: "rate_asc", label: "Rate: Low → High" },
   { key: "jobs_desc", label: "Most Jobs Done" },
-];
-
-const SKILL_OPTIONS = [
-  "Solidity",
-  "React",
-  "TypeScript",
-  "Figma",
-  "Node.js",
-  "The Graph",
-  "Rust",
-  "Security",
-  "UI/UX",
-  "Technical Writing",
 ];
 
 const TIERS: Tier[] = ["entry", "rising", "skilled", "expert", "elite"];
 const ITEMS_PER_PAGE = 6;
 
+function eloToTier(elo: number): Tier {
+  if (elo >= 2000) return "elite";
+  if (elo >= 1500) return "expert";
+  if (elo >= 1000) return "skilled";
+  if (elo >= 600) return "rising";
+  return "entry";
+}
+
+function useChainFreelancers() {
+  const { data: events, isLoading: eventsLoading } = useScaffoldEventHistory({
+    contractName: "DecentraWorkRegistry",
+    eventName: "NameRegistered",
+    fromBlock: 0n,
+    watch: true,
+  });
+
+  // Unique freelancers — latest registration wins
+  const entries = useMemo(() => {
+    if (!events) return [];
+    const seen = new Set<string>();
+    const result: { name: string; address: `0x${string}` }[] = [];
+    for (const e of [...events].reverse()) {
+      if (Number(e.args.role) !== 1) continue; // 1 = Freelancer
+      const addr = (e.args.owner as string).toLowerCase();
+      if (seen.has(addr)) continue;
+      seen.add(addr);
+      result.push({ name: e.args.name as string, address: e.args.owner as `0x${string}` });
+    }
+    return result;
+  }, [events]);
+
+  const { data: repInfo } = useDeployedContractInfo({ contractName: "ReputationSystem" });
+  const { data: regInfo } = useDeployedContractInfo({ contractName: "DecentraWorkRegistry" });
+
+  const contracts = useMemo(() => {
+    if (!repInfo || !regInfo || !entries.length) return [];
+    return entries.flatMap(e => [
+      { address: repInfo.address, abi: repInfo.abi, functionName: "getReputation" as const, args: [e.address] },
+      { address: repInfo.address, abi: repInfo.abi, functionName: "getFreelancerRating" as const, args: [e.address] },
+      { address: regInfo.address, abi: regInfo.abi, functionName: "getBio" as const, args: [e.address] },
+    ]);
+  }, [entries, repInfo, regInfo]);
+
+  const { data: reads, isLoading: readsLoading } = useReadContracts({
+    contracts,
+    query: { enabled: contracts.length > 0 },
+  });
+
+  const freelancers = useMemo<Freelancer[]>(() => {
+    return entries.map((entry, i) => {
+      const base = i * 3;
+      const elo = Number((reads?.[base]?.result as bigint | undefined) ?? 0n);
+      const ratingScaled = Number((reads?.[base + 1]?.result as bigint | undefined) ?? 0n);
+      const bio = (reads?.[base + 2]?.result as string | undefined) ?? "";
+      const rating = ratingScaled > 0 ? Math.min(5, ratingScaled / 10) : 0;
+      const tier = eloToTier(elo);
+      const repScore = Math.min(10, Math.round(elo / 250));
+      return {
+        id: entry.address,
+        address: entry.address,
+        name: `${entry.name}.nexora.eth`,
+        title: bio || "DecentraWork Freelancer",
+        tier,
+        elo,
+        rating,
+        totalRatings: 0,
+        jobsDone: 0,
+        skills: [],
+        topSkillScore: { skill: "Reputation", score: repScore },
+      };
+    });
+  }, [entries, reads]);
+
+  return { freelancers, isLoading: eventsLoading || readsLoading };
+}
+
 const ExplorePage: NextPage = () => {
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<Category>("all");
   const [tiers, setTiers] = useState<Set<Tier>>(new Set(TIERS));
   const [minRating, setMinRating] = useState(0);
-  const [maxRate, setMaxRate] = useState(250);
-  const [availability, setAvailability] = useState<Availability>("any");
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
-  const [sortBy, setSortBy] = useState<SortBy>("rating");
+  const [sortBy, setSortBy] = useState<SortBy>("elo_desc");
   const [page, setPage] = useState(1);
+
+  const { freelancers, isLoading } = useChainFreelancers();
 
   const toggleTier = (t: Tier) => {
     setTiers(prev => {
       const n = new Set(prev);
-      if (n.has(t)) {
-        n.delete(t);
-      } else {
-        n.add(t);
-      }
-      return n;
-    });
-    setPage(1);
-  };
-
-  const toggleSkill = (s: string) => {
-    setSelectedSkills(prev => {
-      const n = new Set(prev);
-      if (n.has(s)) {
-        n.delete(s);
-      } else {
-        n.add(s);
-      }
+      if (n.has(t)) n.delete(t);
+      else n.add(t);
       return n;
     });
     setPage(1);
@@ -285,51 +141,28 @@ const ExplorePage: NextPage = () => {
   const resetFilters = () => {
     setTiers(new Set(TIERS));
     setMinRating(0);
-    setMaxRate(250);
-    setAvailability("any");
-    setVerifiedOnly(false);
-    setSelectedSkills(new Set());
     setPage(1);
   };
 
-  const activeFilterCount = [
-    tiers.size < TIERS.length,
-    minRating > 0,
-    maxRate < 250,
-    availability !== "any",
-    verifiedOnly,
-    selectedSkills.size > 0,
-  ].filter(Boolean).length;
+  const activeFilterCount = [tiers.size < TIERS.length, minRating > 0].filter(Boolean).length;
 
   const filtered = useMemo(() => {
-    let list = MOCK_FREELANCERS.filter(f => {
-      if (category !== "all" && f.category !== category) return false;
+    let list = freelancers.filter(f => {
       if (!tiers.has(f.tier)) return false;
-      if (f.rating < minRating) return false;
-      if (f.hourlyRate > maxRate) return false;
-      if (availability === "available" && !f.available) return false;
-      if (availability === "busy" && f.available) return false;
-      if (verifiedOnly && !f.verified) return false;
-      if (selectedSkills.size > 0 && !f.skills.some(s => selectedSkills.has(s))) return false;
+      if (f.rating > 0 && f.rating < minRating) return false;
       if (search) {
         const q = search.toLowerCase();
-        return (
-          f.name.toLowerCase().includes(q) ||
-          f.title.toLowerCase().includes(q) ||
-          f.skills.some(s => s.toLowerCase().includes(q))
-        );
+        return f.name.toLowerCase().includes(q) || f.title.toLowerCase().includes(q);
       }
       return true;
     });
 
     if (sortBy === "elo_desc") list = [...list].sort((a, b) => b.elo - a.elo);
     if (sortBy === "rating") list = [...list].sort((a, b) => b.rating - a.rating);
-    if (sortBy === "rate_asc") list = [...list].sort((a, b) => a.hourlyRate - b.hourlyRate);
-    if (sortBy === "rate_desc") list = [...list].sort((a, b) => b.hourlyRate - a.hourlyRate);
     if (sortBy === "jobs_desc") list = [...list].sort((a, b) => b.jobsDone - a.jobsDone);
 
     return list;
-  }, [search, category, tiers, minRating, maxRate, availability, verifiedOnly, selectedSkills, sortBy]);
+  }, [search, tiers, minRating, sortBy, freelancers]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -347,62 +180,64 @@ const ExplorePage: NextPage = () => {
         {/* Main content */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Search + sort bar */}
-          <div className="px-6 pt-5 pb-4 border-b border-base-300 bg-base-100 flex flex-col gap-3 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
-                <input
-                  type="text"
-                  placeholder="Search by name, skill, or ENS..."
-                  value={search}
-                  onChange={e => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                  className="input input-bordered w-full pl-9 text-sm"
-                />
-              </div>
-              <select
-                className="select select-bordered select-sm text-sm w-44 shrink-0"
-                value={sortBy}
+          <div className="px-6 pt-5 pb-4 border-b border-base-300 bg-base-100 flex items-center gap-3 shrink-0">
+            <div className="relative flex-1">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
+              <input
+                type="text"
+                placeholder="Search by name or ENS..."
+                value={search}
                 onChange={e => {
-                  setSortBy(e.target.value as SortBy);
+                  setSearch(e.target.value);
                   setPage(1);
                 }}
-              >
-                {SORT_OPTIONS.map(o => (
-                  <option key={o.key} value={o.key}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <span className="text-xs text-base-content/40 shrink-0 whitespace-nowrap">
-                {filtered.length} freelancers
-              </span>
+                className="input input-bordered w-full pl-9 text-sm"
+              />
             </div>
-
-            <div className="flex gap-2 flex-wrap">
-              {CATEGORIES.map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => {
-                    setCategory(key);
-                    setPage(1);
-                  }}
-                  className={`btn btn-xs rounded-full ${category === key ? "btn-primary" : "btn-ghost border border-base-300 hover:border-primary hover:text-primary"}`}
-                >
-                  {label}
-                </button>
+            <select
+              className="select select-bordered select-sm text-sm w-44 shrink-0"
+              value={sortBy}
+              onChange={e => {
+                setSortBy(e.target.value as SortBy);
+                setPage(1);
+              }}
+            >
+              {SORT_OPTIONS.map(o => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
               ))}
-            </div>
+            </select>
+            <span className="text-xs text-base-content/40 shrink-0 whitespace-nowrap">
+              {isLoading ? "Loading…" : `${filtered.length} freelancers`}
+            </span>
           </div>
 
           {/* Freelancer grid */}
           <div className="flex-1 overflow-y-auto px-6 py-5">
-            {paginated.length === 0 ? (
+            {isLoading ? (
+              <div className="grid grid-cols-2 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="bg-base-100 border border-base-300 rounded-xl p-5 flex flex-col gap-3 animate-pulse"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-11 h-11 rounded-full bg-base-300 shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 bg-base-300 rounded w-2/3" />
+                        <div className="h-2.5 bg-base-300 rounded w-1/2" />
+                      </div>
+                    </div>
+                    <div className="h-2 bg-base-300 rounded w-full" />
+                    <div className="h-2 bg-base-300 rounded w-3/4" />
+                  </div>
+                ))}
+              </div>
+            ) : paginated.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-base-content/30 text-sm gap-2">
                 <FunnelIcon className="w-8 h-8 opacity-30" />
-                No freelancers match your filters.
+                {freelancers.length === 0 ? "No freelancers registered yet." : "No freelancers match your filters."}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
@@ -418,16 +253,14 @@ const ExplorePage: NextPage = () => {
                         <div className="relative shrink-0">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={blo(f.address)} alt={f.name} className="w-11 h-11 rounded-full" />
-                          {f.available && (
-                            <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-success border-2 border-base-100" />
-                          )}
+                          <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-success border-2 border-base-100" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 mb-0.5">
                             <span className="font-bold text-sm text-base-content group-hover:text-primary transition-colors truncate">
                               {f.name}
                             </span>
-                            {f.verified && <CheckBadgeIcon className="w-3.5 h-3.5 text-primary shrink-0" />}
+                            <CheckBadgeIcon className="w-3.5 h-3.5 text-primary shrink-0" />
                             <span
                               className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${tier.bg} ${tier.color}`}
                             >
@@ -442,20 +275,22 @@ const ExplorePage: NextPage = () => {
                       <div className="flex items-center gap-4 text-xs">
                         <div className="flex items-center gap-1">
                           <StarIcon className="w-3.5 h-3.5 text-amber-400" />
-                          <span className="font-semibold text-base-content">{f.rating.toFixed(1)}</span>
-                          <span className="text-base-content/40">({f.totalRatings})</span>
+                          {f.rating > 0 ? (
+                            <span className="font-semibold text-base-content">{f.rating.toFixed(1)}</span>
+                          ) : (
+                            <span className="text-base-content/30">No rating yet</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 text-base-content/50">
                           <BoltIcon className="w-3.5 h-3.5" />
-                          <span>{f.elo} Elo</span>
+                          <span>{f.elo > 0 ? `${f.elo} Elo` : "New"}</span>
                         </div>
-                        <div className="ml-auto font-bold text-primary text-sm">${f.hourlyRate}/hr</div>
                       </div>
 
-                      {/* Top skill score */}
+                      {/* Reputation score bar */}
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] text-base-content/40">Top skill: {f.topSkillScore.skill}</span>
+                          <span className="text-[11px] text-base-content/40">{f.topSkillScore.skill}</span>
                           <span className="text-[11px] font-bold text-base-content">{f.topSkillScore.score}/10</span>
                         </div>
                         <div className="w-full h-1.5 bg-base-300 rounded-full overflow-hidden">
@@ -466,26 +301,12 @@ const ExplorePage: NextPage = () => {
                         </div>
                       </div>
 
-                      {/* Skills */}
-                      <div className="flex flex-wrap gap-1.5">
-                        {f.skills.slice(0, 4).map(s => (
-                          <span key={s} className="badge badge-ghost border border-base-300 text-[11px]">
-                            {s}
-                          </span>
-                        ))}
-                        {f.skills.length > 4 && (
-                          <span className="badge badge-ghost border border-base-300 text-[11px]">
-                            +{f.skills.length - 4}
-                          </span>
-                        )}
-                      </div>
-
                       {/* Footer */}
                       <div className="flex items-center justify-between text-xs text-base-content/40 pt-1 border-t border-base-200">
-                        <span>{f.jobsDone} jobs completed</span>
-                        <span className={f.available ? "text-success font-medium" : "text-base-content/30"}>
-                          {f.available ? "Available now" : "Unavailable"}
+                        <span className="font-mono text-[10px]">
+                          {f.address.slice(0, 6)}…{f.address.slice(-4)}
                         </span>
+                        <span className="text-success font-medium">On-chain verified</span>
                       </div>
                     </div>
                   );
@@ -571,29 +392,6 @@ const ExplorePage: NextPage = () => {
               })}
             </div>
 
-            {/* Hourly rate */}
-            <div>
-              <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
-                Max Hourly Rate
-              </p>
-              <input
-                type="range"
-                min={10}
-                max={250}
-                step={5}
-                value={maxRate}
-                onChange={e => {
-                  setMaxRate(Number(e.target.value));
-                  setPage(1);
-                }}
-                className="range range-primary range-xs w-full"
-              />
-              <div className="flex justify-between text-[10px] text-base-content/40 mt-0.5">
-                <span>$10/hr</span>
-                <span>{maxRate >= 250 ? "$250+/hr" : `$${maxRate}/hr`}</span>
-              </div>
-            </div>
-
             {/* Min rating */}
             <div>
               <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Min Rating</p>
@@ -613,62 +411,13 @@ const ExplorePage: NextPage = () => {
               </div>
             </div>
 
-            {/* Availability */}
+            {/* Identity */}
             <div>
-              <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Availability</p>
-              {(["any", "available", "busy"] as Availability[]).map(a => (
-                <label key={a} className="flex items-center gap-2 mb-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="availability"
-                    className="radio radio-primary radio-sm"
-                    checked={availability === a}
-                    onChange={() => {
-                      setAvailability(a);
-                      setPage(1);
-                    }}
-                  />
-                  <span className="text-sm text-base-content/70 capitalize">
-                    {a === "any" ? "Any" : a === "available" ? "Available now" : "Busy"}
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            {/* Skills */}
-            <div>
-              <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Skills</p>
-              <div className="flex flex-wrap gap-1.5">
-                {SKILL_OPTIONS.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => toggleSkill(s)}
-                    className={`btn btn-xs rounded-full text-[11px] ${selectedSkills.has(s) ? "btn-primary" : "btn-ghost border border-base-300"}`}
-                  >
-                    {s}
-                  </button>
-                ))}
+              <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-2">Identity</p>
+              <div className="flex items-center gap-2 text-xs text-base-content/50">
+                <CheckBadgeIcon className="w-3.5 h-3.5 text-primary shrink-0" />
+                All shown are on-chain verified
               </div>
-            </div>
-
-            {/* Verified only */}
-            <div>
-              <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Identity</p>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="checkbox checkbox-primary checkbox-sm"
-                  checked={verifiedOnly}
-                  onChange={e => {
-                    setVerifiedOnly(e.target.checked);
-                    setPage(1);
-                  }}
-                />
-                <span className="text-sm text-base-content/70 flex items-center gap-1">
-                  <CheckBadgeIcon className="w-3.5 h-3.5 text-primary" />
-                  Verified only
-                </span>
-              </label>
             </div>
           </div>
         </aside>

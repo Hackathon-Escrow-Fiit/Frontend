@@ -71,15 +71,45 @@ const Home: NextPage = () => {
       <nav className="flex items-center justify-between px-10 py-4 border-b border-base-200">
         <span className="font-bold text-base text-base-content">DecentraWork</span>
         <div className="flex items-center gap-8">
-          <span className="text-sm text-base-content/60 cursor-pointer hover:text-base-content transition-colors">
-            Post a Task
-          </span>
-          <span className="text-sm text-base-content/60 cursor-pointer hover:text-base-content transition-colors">
-            Find Work
-          </span>
-          <span className="text-sm text-base-content/60 cursor-pointer hover:text-base-content transition-colors">
-            Explore Freelancers
-          </span>
+          <ConnectButton.Custom>
+            {({ openConnectModal, mounted, account, chain }) => {
+              const connected = !!(mounted && account && chain);
+              return (
+                <span
+                  onClick={() => handleEnter(openConnectModal, connected, "/post-task")}
+                  className="text-sm text-base-content/60 cursor-pointer hover:text-base-content transition-colors"
+                >
+                  Post a Task
+                </span>
+              );
+            }}
+          </ConnectButton.Custom>
+          <ConnectButton.Custom>
+            {({ openConnectModal, mounted, account, chain }) => {
+              const connected = !!(mounted && account && chain);
+              return (
+                <span
+                  onClick={() => handleEnter(openConnectModal, connected, "/find-work")}
+                  className="text-sm text-base-content/60 cursor-pointer hover:text-base-content transition-colors"
+                >
+                  Find Work
+                </span>
+              );
+            }}
+          </ConnectButton.Custom>
+          <ConnectButton.Custom>
+            {({ openConnectModal, mounted, account, chain }) => {
+              const connected = !!(mounted && account && chain);
+              return (
+                <span
+                  onClick={() => handleEnter(openConnectModal, connected, "/explore")}
+                  className="text-sm text-base-content/60 cursor-pointer hover:text-base-content transition-colors"
+                >
+                  Explore Freelancers
+                </span>
+              );
+            }}
+          </ConnectButton.Custom>
         </div>
         <ConnectButton showBalance={false} />
       </nav>
