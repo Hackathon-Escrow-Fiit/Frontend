@@ -22,6 +22,12 @@ cache-zk
 
 # deployments
 deployments/localhost
+deployments/sepolia
+
+# one-time deploy scripts
+scripts/cancelStuckTx.ts
+scripts/deployDAODispute.ts
+scripts/deployRemaining.ts
 
 # typescript
 *.tsbuildinfo
