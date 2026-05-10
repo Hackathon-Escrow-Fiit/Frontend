@@ -657,7 +657,7 @@ export default function TaskViewPage() {
                           Request Changes
                         </button>
                         <Link
-                          href={`/disputes/${id}/defense`}
+                          href={`/disputes/${id}/open`}
                           className="btn w-full gap-2 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300"
                         >
                           <ExclamationTriangleIcon className="w-4 h-4" />
@@ -1412,7 +1412,7 @@ export default function TaskViewPage() {
                     Request Changes
                   </button>
                   <Link
-                    href={`/disputes/${id}/defense`}
+                    href={`/disputes/${id}/open`}
                     className="btn w-full gap-2 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300"
                   >
                     <ExclamationTriangleIcon className="w-4 h-4" />

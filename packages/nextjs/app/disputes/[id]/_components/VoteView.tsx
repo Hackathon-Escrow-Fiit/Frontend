@@ -1,11 +1,11 @@
 "use client";
 
+import type { DisputeData, OnChainJob } from "./shared";
+import { Address } from "@scaffold-ui/components";
 import { CheckCircleIcon, ScaleIcon, ShieldExclamationIcon } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as CheckCircleSolid } from "@heroicons/react/24/solid";
-import { Address } from "@scaffold-ui/components";
 import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
-import type { DisputeData, OnChainJob } from "./shared";
 
 export const VoteView = ({
   id,
@@ -137,11 +137,89 @@ export const VoteView = ({
         )}
 
         {isParticipant && (
+          <>
+            <div className="bg-base-100 border border-base-300 rounded-2xl p-6">
+              <h2 className="text-base font-semibold text-base-content mb-2">Voting in Progress</h2>
+              <p className="text-sm text-base-content/60">
+                As a party to this dispute you cannot vote, but you can track the community&apos;s decision here.
+              </p>
+            </div>
+
+            <div className="bg-base-100 border border-base-300 rounded-2xl p-6">
+              <h2 className="text-base font-semibold text-base-content mb-4">Live Vote Tally</h2>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="font-medium text-warning">For Client ({forPct}%)</span>
+                    <span className="text-base-content/50 font-mono">
+                      {dispute?.forWeight.toString() ?? "0"} weight
+                    </span>
+                  </div>
+                  <div className="h-3 bg-base-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-warning rounded-full transition-all duration-500"
+                      style={{ width: `${forPct}%` }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="font-medium text-success">Against / Full Pay ({againstPct}%)</span>
+                    <span className="text-base-content/50 font-mono">
+                      {dispute?.againstWeight.toString() ?? "0"} weight
+                    </span>
+                  </div>
+                  <div className="h-3 bg-base-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-success rounded-full transition-all duration-500"
+                      style={{ width: `${againstPct}%` }}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-base-content/40 text-center">
+                  {dispute?.voterCount.toString() ?? "0"} juror{dispute?.voterCount !== 1n ? "s" : ""} voted
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Juror who has already voted sees tally too */}
+        {address && !isParticipant && hasVoted && (
           <div className="bg-base-100 border border-base-300 rounded-2xl p-6">
-            <h2 className="text-base font-semibold text-base-content mb-2">Voting in Progress</h2>
-            <p className="text-sm text-base-content/60">
-              As a party to this dispute you cannot vote, but you can track the community{"'"}s decision here.
-            </p>
+            <h2 className="text-base font-semibold text-base-content mb-4">Current Tally</h2>
+            <div className="flex flex-col gap-4">
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="font-medium text-warning">For Client ({forPct}%)</span>
+                  <span className="text-base-content/50 font-mono">{dispute?.forWeight.toString() ?? "0"} weight</span>
+                </div>
+                <div className="h-3 bg-base-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-warning rounded-full transition-all duration-500"
+                    style={{ width: `${forPct}%` }}
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="font-medium text-success">Against / Full Pay ({againstPct}%)</span>
+                  <span className="text-base-content/50 font-mono">
+                    {dispute?.againstWeight.toString() ?? "0"} weight
+                  </span>
+                </div>
+                <div className="h-3 bg-base-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-success rounded-full transition-all duration-500"
+                    style={{ width: `${againstPct}%` }}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-base-content/40 text-center">
+                {dispute?.voterCount.toString() ?? "0"} juror{dispute?.voterCount !== 1n ? "s" : ""} voted · tally
+                visible after your vote
+              </p>
+            </div>
           </div>
         )}
 
@@ -150,38 +228,13 @@ export const VoteView = ({
             Connect your wallet to vote.
           </div>
         )}
-
-        <div className="bg-base-100 border border-base-300 rounded-2xl p-6">
-          <h2 className="text-base font-semibold text-base-content mb-4">Live Vote Tally</h2>
-          <div className="flex flex-col gap-4">
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="font-medium text-warning">For Client ({forPct}%)</span>
-                <span className="text-base-content/50 font-mono">{dispute?.forWeight.toString() ?? "0"} weight</span>
-              </div>
-              <div className="h-3 bg-base-200 rounded-full overflow-hidden">
-                <div className="h-full bg-warning rounded-full transition-all duration-500" style={{ width: `${forPct}%` }} />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="font-medium text-success">Against / Full Pay ({againstPct}%)</span>
-                <span className="text-base-content/50 font-mono">{dispute?.againstWeight.toString() ?? "0"} weight</span>
-              </div>
-              <div className="h-3 bg-base-200 rounded-full overflow-hidden">
-                <div className="h-full bg-success rounded-full transition-all duration-500" style={{ width: `${againstPct}%` }} />
-              </div>
-            </div>
-            <p className="text-xs text-base-content/40 text-center">
-              {dispute?.voterCount.toString() ?? "0"} juror{dispute?.voterCount !== 1n ? "s" : ""} voted
-            </p>
-          </div>
-        </div>
       </div>
 
       <div className="w-full lg:w-72 shrink-0 flex flex-col gap-4">
         <div className="bg-base-100 border border-base-300 rounded-2xl p-5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-3">Dispute Parties</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-3">
+            Dispute Parties
+          </p>
           {job ? (
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2">
