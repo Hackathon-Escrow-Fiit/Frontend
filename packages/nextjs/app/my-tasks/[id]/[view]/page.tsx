@@ -160,6 +160,7 @@ export default function TaskViewPage() {
   const handleApprove = async () => {
     setApproveLoading(true);
     try {
+      // Step 1: backend approves → AI oracle calls approveWork + writes reputation/skills on chain
       const res = await fetch(`${backendUrl}/client-decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -167,6 +168,37 @@ export default function TaskViewPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       const data: ApproveResult = await res.json();
+
+      notification.success("AI evaluation approved — releasing escrow…");
+
+      // Step 2: release escrow. claimPayment() is callable by anyone once job is AIApproved.
+      // The backend's approveWork tx may need a moment to be mined, so we retry once on
+      // InvalidJobStatus before giving up.
+      let claimed = false;
+      for (let attempt = 0; attempt < 2 && !claimed; attempt++) {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 3000));
+        try {
+          await marketplaceWrite({ functionName: "claimPayment", args: [jobId] });
+          claimed = true;
+          notification.success("Payment released to freelancer!");
+        } catch (claimErr: any) {
+          const msg: string = claimErr?.message ?? claimErr?.toString() ?? "";
+          if (msg.includes("DisputeWindowOpen") || msg.includes("dispute window")) {
+            // Dispute window not yet passed — backend approved but funds aren't released yet
+            notification.info("Approved! Funds will be claimable by the freelancer once the dispute window closes.");
+            claimed = true; // stop retrying — this is expected
+          } else if (msg.includes("InvalidJobStatus") && attempt === 0) {
+            // Backend tx may not be mined yet — retry after delay
+            continue;
+          } else {
+            // Unexpected error — approval is done on backend, log and continue
+            notification.warning("Approval recorded. Escrow release may need manual claiming.");
+            console.error("claimPayment error:", claimErr);
+            claimed = true;
+          }
+        }
+      }
+
       setApproved(true);
       sessionStorage.setItem(
         `dw_results_${id}`,
@@ -174,6 +206,7 @@ export default function TaskViewPage() {
       );
       router.push(`/my-tasks/${id}/results`);
     } catch (e) {
+      notification.error("Approval failed. Please try again.");
       console.error("Approve failed:", e);
     } finally {
       setApproveLoading(false);
@@ -265,6 +298,10 @@ export default function TaskViewPage() {
   }, [bidResults]);
 
   const { writeContractAsync: acceptBidWrite, isPending: isAccepting } = useScaffoldWriteContract({
+    contractName: "JobMarketplace",
+  });
+
+  const { writeContractAsync: marketplaceWrite } = useScaffoldWriteContract({
     contractName: "JobMarketplace",
   });
 
