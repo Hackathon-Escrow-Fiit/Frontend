@@ -28,7 +28,7 @@ export const VoteView = ({
   dispute: DisputeData;
   address: string | undefined;
 }) => {
-  const jobIdBig = BigInt(id);
+  const jobIdBig = /^\d+$/.test(id) ? BigInt(id) : 0n;
   const [selectedSolution, setSelectedSolution] = useState<number | null>(null);
   const [suggestPayment, setSuggestPayment] = useState("50");
   const [suggestDesc, setSuggestDesc] = useState("");

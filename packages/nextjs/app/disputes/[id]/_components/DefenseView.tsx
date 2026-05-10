@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { DocumentTextIcon, PaperClipIcon, PhotoIcon, ScaleIcon, ShieldExclamationIcon, UserGroupIcon } from "@heroicons/react/24/outline";
-import { CheckCircleIcon as CheckCircleSolid } from "@heroicons/react/24/solid";
+import type { DisputeData, OnChainJob } from "./shared";
 import { Address } from "@scaffold-ui/components";
+import {
+  DocumentTextIcon,
+  PaperClipIcon,
+  PhotoIcon,
+  ScaleIcon,
+  ShieldExclamationIcon,
+  UserGroupIcon,
+} from "@heroicons/react/24/outline";
+import { CheckCircleIcon as CheckCircleSolid } from "@heroicons/react/24/solid";
 import { useScaffoldEventHistory, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
-import type { DisputeData, OnChainJob } from "./shared";
 
 export const DefenseView = ({
   id,
@@ -42,7 +49,7 @@ export const DefenseView = ({
   });
 
   const timeline = useMemo(() => {
-    const jobIdBig = BigInt(id);
+    const jobIdBig = /^\d+$/.test(id) ? BigInt(id) : 0n;
     const initiated = (initiatedEvents ?? [])
       .filter((e: any) => e.args.jobId === jobIdBig)
       .map((e: any) => ({
@@ -74,7 +81,10 @@ export const DefenseView = ({
       return;
     }
     try {
-      await writeContractAsync({ functionName: "submitDefense", args: [BigInt(id), statement.trim()] });
+      await writeContractAsync({
+        functionName: "submitDefense",
+        args: [/^\d+$/.test(id) ? BigInt(id) : 0n, statement.trim()],
+      });
       notification.success("Defense statement submitted on-chain.");
       setStatement("");
     } catch (e) {

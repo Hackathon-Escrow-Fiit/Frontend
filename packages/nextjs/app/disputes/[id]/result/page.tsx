@@ -24,7 +24,7 @@ export default function ResultPage() {
 
   const { data: contractInfo } = useDeployedContractInfo({ contractName: "DAODispute" });
   const solutionCount = dispute?.solutionCount ? Number(dispute.solutionCount) : 0;
-  const jobIdBig = BigInt(id);
+  const jobIdBig = /^\d+$/.test(id) ? BigInt(id) : 0n;
 
   const { data: solutionsRaw } = useReadContracts({
     contracts: Array.from({ length: solutionCount }, (_, i) => ({
@@ -59,7 +59,7 @@ export default function ResultPage() {
 
   const handleFinalize = async () => {
     try {
-      await writeContractAsync({ functionName: "finalizeDispute", args: [BigInt(id)] });
+      await writeContractAsync({ functionName: "finalizeDispute", args: [jobIdBig] });
       notification.success("Dispute finalized — funds distributed.");
     } catch (e) {
       notification.error(getParsedError(e));

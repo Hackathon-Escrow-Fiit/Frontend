@@ -39,10 +39,13 @@ export const formatTs = (ts: bigint) =>
   });
 
 export const useDisputeData = (id: string) => {
+  const idNum = /^\d+$/.test(id) ? BigInt(id) : 0n;
+
   const { data: rawJob } = useScaffoldReadContract({
     contractName: "JobMarketplace",
     functionName: "getJob",
-    args: [BigInt(id)],
+    args: [idNum],
+    query: { enabled: idNum > 0n },
   });
 
   const job = useMemo<OnChainJob | null>(() => {
@@ -54,7 +57,8 @@ export const useDisputeData = (id: string) => {
   const { data: rawDispute } = useScaffoldReadContract({
     contractName: "DAODispute",
     functionName: "getDispute",
-    args: [BigInt(id)],
+    args: [idNum],
+    query: { enabled: idNum > 0n },
   });
 
   const dispute = useMemo(() => {
