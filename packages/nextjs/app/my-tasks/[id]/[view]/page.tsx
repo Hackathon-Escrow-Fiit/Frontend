@@ -302,7 +302,8 @@ export default function TaskViewPage() {
 
   /* â”€â”€ WAITING VIEW â”€â”€ */
   if (view === "waiting") {
-    const isEvaluating = !report || report.status === "evaluating";
+    const notSubmitted = !report;
+    const isEvaluating = report?.status === "evaluating";
     const isDone = report && report.status === "pending";
     const isError = report && report.status === "error";
 
@@ -381,6 +382,24 @@ export default function TaskViewPage() {
 
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-4">
+              {/* Not yet submitted — show upload prompt */}
+              {notSubmitted && (
+                <div className="bg-base-100 rounded-2xl border border-base-200 p-12 flex flex-col items-center text-center">
+                  <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-5">
+                    <ArrowUpTrayIcon className="w-10 h-10 text-primary" />
+                  </div>
+                  <h2 className="text-xl font-bold text-base-content mb-2">Ready to submit your work?</h2>
+                  <p className="text-sm text-base-content/50 max-w-sm mb-6">
+                    Upload your deliverables and the AI will evaluate them automatically. The client will be notified
+                    once the review is complete.
+                  </p>
+                  <button className="btn btn-primary gap-2" onClick={() => router.push(`/my-tasks/${id}/upload`)}>
+                    <ArrowUpTrayIcon className="w-4 h-4" />
+                    Submit Your Work
+                  </button>
+                </div>
+              )}
+
               {/* Evaluating */}
               {isEvaluating && (
                 <div className="bg-base-100 rounded-2xl border border-base-200 p-12 flex flex-col items-center text-center">
@@ -674,6 +693,22 @@ export default function TaskViewPage() {
 
             {/* Sidebar */}
             <div className="w-60 shrink-0 space-y-3">
+              {notSubmitted && (
+                <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
+                  <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Status</p>
+                  <p className="text-xs text-base-content/60 leading-relaxed mb-3">
+                    No submission yet. Upload your files to start the AI review.
+                  </p>
+                  <button
+                    className="btn btn-primary btn-sm w-full gap-2"
+                    onClick={() => router.push(`/my-tasks/${id}/upload`)}
+                  >
+                    <ArrowUpTrayIcon className="w-3.5 h-3.5" />
+                    Submit Work
+                  </button>
+                </div>
+              )}
+
               {isEvaluating && (
                 <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
                   <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">Status</p>
