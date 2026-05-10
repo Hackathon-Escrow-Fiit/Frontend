@@ -60,23 +60,21 @@ export const useDisputeData = (id: string) => {
   const dispute = useMemo(() => {
     if (!rawDispute) return null;
     const [
-      proposedPaymentBps,
       stakedTokens,
       votingDeadline,
-      forWeight,
-      againstWeight,
-      voterCount,
+      solutionCount,
+      totalVoterCount,
       finalized,
+      winningSolutionIndex,
       defenseStatement,
-    ] = rawDispute as readonly [bigint, bigint, bigint, bigint, bigint, bigint, boolean, string];
+    ] = rawDispute as readonly [bigint, bigint, bigint, bigint, boolean, bigint, string];
     return {
-      proposedPaymentBps,
       stakedTokens,
       votingDeadline,
-      forWeight,
-      againstWeight,
-      voterCount,
+      solutionCount,
+      totalVoterCount,
       finalized,
+      winningSolutionIndex,
       defenseStatement,
     };
   }, [rawDispute]);
@@ -172,7 +170,7 @@ export const DisputeHeader = ({
         </div>
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-base-content/40 mb-1">Jurors Voted</p>
-          <p className="text-base font-bold text-base-content">{dispute?.voterCount.toString() ?? "—"}</p>
+          <p className="text-base font-bold text-base-content">{dispute?.totalVoterCount.toString() ?? "—"}</p>
         </div>
       </div>
     </>
