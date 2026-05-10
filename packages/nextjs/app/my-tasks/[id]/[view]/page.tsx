@@ -212,6 +212,7 @@ export default function TaskViewPage() {
       deadline: r.deadline as bigint,
       status: Number(r.status),
       bidCount: Number(r.bidCount),
+      aiDecisionAt: r.aiDecisionAt as bigint,
     };
   }, [rawJob]);
 
@@ -280,6 +281,33 @@ export default function TaskViewPage() {
   const { writeContractAsync: initiateDispute, isPending: isDisputePending } = useScaffoldWriteContract({
     contractName: "JobMarketplace",
   });
+  const { writeContractAsync: marketplaceWrite, isPending: isClaimPending } = useScaffoldWriteContract({
+    contractName: "JobMarketplace",
+  });
+
+  const DISPUTE_WINDOW_SECS = 48 * 3600;
+  const nowSecs = Math.floor(Date.now() / 1000);
+  const canClaimPayment =
+    job?.status === 3 && job.aiDecisionAt > 0n && nowSecs >= Number(job.aiDecisionAt) + DISPUTE_WINDOW_SECS;
+  const claimWindowSecsLeft =
+    job?.status === 3 && job.aiDecisionAt > 0n
+      ? Math.max(0, Number(job.aiDecisionAt) + DISPUTE_WINDOW_SECS - nowSecs)
+      : null;
+
+  const handleClaimPayment = async () => {
+    try {
+      await marketplaceWrite({ functionName: "claimPayment", args: [jobId] });
+      notification.success("Payment claimed! Escrow released to your wallet.");
+    } catch (e: any) {
+      const msg: string = e?.message ?? e?.toString() ?? "";
+      if (msg.includes("DisputeWindowOpen")) {
+        notification.error("Dispute window hasn't closed yet. Please wait.");
+      } else {
+        notification.error("Failed to claim payment.");
+        console.error(e);
+      }
+    }
+  };
 
   const { data: marketplaceInfo } = useDeployedContractInfo({ contractName: "JobMarketplace" });
 
@@ -841,27 +869,71 @@ export default function TaskViewPage() {
                       </p>
                     </div>
                   ) : (
-                    /* Freelancer: What Happens Next + View Results + Open Dispute */
+                    /* Freelancer: Claim Payment or What Happens Next */
                     <div className="bg-base-100 rounded-2xl border border-base-200 p-5 space-y-4">
-                      <div>
-                        <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
-                          What Happens Next
-                        </p>
-                        <div className="space-y-3">
-                          {[
-                            { step: "1", text: "Client reviews this AI report" },
-                            { step: "2", text: "Client approves, rejects, or escalates to DAO" },
-                            { step: "3", text: "Escrow released on approval" },
-                          ].map(({ step, text }) => (
-                            <div key={step} className="flex items-start gap-2.5">
-                              <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                                <span className="text-[10px] font-bold text-primary">{step}</span>
+                      {canClaimPayment ? (
+                        <>
+                          <div className="bg-success/8 border border-success/25 rounded-xl p-4">
+                            <p className="text-xs font-bold text-success mb-1">Dispute window closed</p>
+                            <p className="text-xs text-base-content/60 leading-relaxed">
+                              No dispute was filed. You can now claim your escrow payment.
+                            </p>
+                          </div>
+                          <button
+                            className="btn btn-success w-full gap-2"
+                            onClick={handleClaimPayment}
+                            disabled={isClaimPending}
+                          >
+                            {isClaimPending ? (
+                              <>
+                                <span className="loading loading-spinner loading-xs" /> Claiming…
+                              </>
+                            ) : (
+                              <>
+                                <CurrencyDollarIcon className="w-5 h-5" /> Claim Payment
+                              </>
+                            )}
+                          </button>
+                        </>
+                      ) : job?.status === 3 && claimWindowSecsLeft !== null ? (
+                        <>
+                          <div className="bg-warning/8 border border-warning/25 rounded-xl p-4">
+                            <p className="text-xs font-bold text-warning mb-1">Dispute window open</p>
+                            <p className="text-xs text-base-content/60 leading-relaxed">
+                              Client approved your work. You can claim payment in{" "}
+                              <span className="font-semibold text-base-content">
+                                {claimWindowSecsLeft > 3600
+                                  ? `${Math.ceil(claimWindowSecsLeft / 3600)}h`
+                                  : `${Math.ceil(claimWindowSecsLeft / 60)}m`}
+                              </span>{" "}
+                              once the 48-hour dispute window closes.
+                            </p>
+                          </div>
+                          <button className="btn btn-success w-full gap-2" disabled>
+                            <CurrencyDollarIcon className="w-5 h-5" /> Claim Payment
+                          </button>
+                        </>
+                      ) : (
+                        <div>
+                          <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase mb-3">
+                            What Happens Next
+                          </p>
+                          <div className="space-y-3">
+                            {[
+                              { step: "1", text: "Client reviews this AI report" },
+                              { step: "2", text: "Client approves, rejects, or escalates to DAO" },
+                              { step: "3", text: "Claim payment after 48-hour dispute window" },
+                            ].map(({ step, text }) => (
+                              <div key={step} className="flex items-start gap-2.5">
+                                <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                                  <span className="text-[10px] font-bold text-primary">{step}</span>
+                                </div>
+                                <p className="text-xs text-base-content/60 leading-relaxed">{text}</p>
                               </div>
-                              <p className="text-xs text-base-content/60 leading-relaxed">{text}</p>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <button onClick={goToFreelancerResults} className="btn btn-outline btn-sm w-full gap-2">
                         <CheckCircleIcon className="w-4 h-4" />
                         View My Evaluation Results

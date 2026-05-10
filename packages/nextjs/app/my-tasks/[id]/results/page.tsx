@@ -94,7 +94,7 @@ export default function ResultsPage() {
           </Link>
           <div>
             <h1 className="text-lg font-bold text-base-content leading-tight">
-              {isClient ? "Payment Released" : "Evaluation Results"}
+              {isClient ? "Work Approved" : "Evaluation Results"}
             </h1>
             <p className="text-xs text-base-content/40 font-mono mt-0.5">Task #{id}</p>
           </div>
@@ -109,9 +109,9 @@ export default function ResultsPage() {
                 <CheckCircleIcon className="w-7 h-7 text-success" />
               </div>
               <div>
-                <p className="font-bold text-success text-lg">Payment Released!</p>
+                <p className="font-bold text-success text-lg">Work Approved!</p>
                 <p className="text-xs text-base-content/50 mt-0.5">
-                  Escrow funds have been sent to the freelancer&#39;s wallet.
+                  The freelancer can claim their escrow payment after the 48-hour dispute window closes.
                 </p>
               </div>
             </div>
