@@ -25,6 +25,7 @@ type NavItem = {
 };
 
 const mainNav: NavItem[] = [
+  { label: "Profile", href: "/profile", Icon: UserCircleIcon },
   { label: "Dashboard", href: "/dashboard", Icon: Squares2X2Icon },
   { label: "Messages", href: "/messages", Icon: ChatBubbleLeftRightIcon },
   { label: "My Tasks", href: "/my-tasks", Icon: ClipboardDocumentListIcon },
@@ -32,7 +33,6 @@ const mainNav: NavItem[] = [
   { label: "Juror Portal", href: "/juror", Icon: ScaleIcon },
   { label: "Wallet", href: "/wallet", Icon: WalletIcon },
   { label: "Buy NXR", href: "/swap", Icon: ArrowsRightLeftIcon },
-  { label: "Profile", href: "/profile", Icon: UserCircleIcon },
 ];
 
 const bottomNav: NavItem[] = [{ label: "Support", href: "/support", Icon: QuestionMarkCircleIcon }];
