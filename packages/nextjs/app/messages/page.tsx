@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
 import type { Dm } from "@xmtp/browser-sdk";
 import { blo } from "blo";
+import { isAddress } from "viem";
 import { useAccount } from "wagmi";
 import {
   ArrowDownTrayIcon,
@@ -23,6 +25,7 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
+import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useXmtp } from "~~/hooks/useXmtp";
 import { type XmtpConversation, useXmtpConversations } from "~~/hooks/useXmtpConversations";
 import { type XmtpMessage, useXmtpMessages } from "~~/hooks/useXmtpMessages";
@@ -68,24 +71,96 @@ function fallbackAddress(str: string): `0x${string}` {
 
 // ── New DM modal ──────────────────────────────────────────────────────────────
 function NewDmModal({ onDm, onClose }: { onDm: (address: string) => void; onClose: () => void }) {
-  const [addr, setAddr] = useState("");
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(query.trim()), 400);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  const looksLikeAddress = isAddress(debounced);
+  const looksLikeName = !looksLikeAddress && debounced.length >= 3;
+
+  // Name → address lookup
+  const { data: resolvedAddr, isLoading: resolvingAddr } = useScaffoldReadContract({
+    contractName: "DecentraWorkRegistry",
+    functionName: "getAddress",
+    args: [debounced],
+    query: { enabled: looksLikeName },
+  });
+
+  // Address → name lookup
+  const { data: resolvedName } = useScaffoldReadContract({
+    contractName: "DecentraWorkRegistry",
+    functionName: "getName",
+    args: [debounced as `0x${string}`],
+    query: { enabled: looksLikeAddress },
+  });
+
+  const finalAddress: string | null = looksLikeAddress
+    ? debounced
+    : (resolvedAddr as string | undefined) ?? null;
+
+  const finalName: string | null = looksLikeAddress
+    ? (resolvedName as string | undefined) || null
+    : looksLikeName
+      ? debounced
+      : null;
+
+  const notFound =
+    looksLikeName && !resolvingAddr && debounced === query.trim() &&
+    (!finalAddress || finalAddress === "0x0000000000000000000000000000000000000000");
+
+  const canStart =
+    !!finalAddress && finalAddress !== "0x0000000000000000000000000000000000000000";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-base-100 rounded-2xl p-6 w-80 shadow-xl">
-        <h3 className="font-bold text-base-content mb-3">New Message</h3>
-        <input
-          autoFocus
-          type="text"
-          placeholder="Recipient address (0x…)"
-          className="input input-bordered w-full text-sm mb-3"
-          value={addr}
-          onChange={e => setAddr(e.target.value)}
-        />
+      <div className="bg-base-100 rounded-2xl p-6 w-96 shadow-xl">
+        <h3 className="font-bold text-base-content mb-1">New Message</h3>
+        <p className="text-xs text-base-content/40 mb-3">Enter a DecentraWork name or wallet address</p>
+        <div className="relative mb-3">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40 pointer-events-none" />
+          <input
+            autoFocus
+            type="text"
+            placeholder="alice or 0x…"
+            className="input input-bordered w-full text-sm pl-9"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+          {resolvingAddr && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 loading loading-spinner loading-xs text-primary" />
+          )}
+        </div>
+
+        {/* Resolved preview */}
+        {canStart && finalAddress && (
+          <div className="flex items-center gap-3 bg-base-200 rounded-xl px-3 py-2.5 mb-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={blo(finalAddress as `0x${string}`)} alt="avatar" className="w-9 h-9 rounded-full shrink-0" />
+            <div className="min-w-0 flex-1">
+              {finalName && <p className="text-sm font-semibold text-base-content">{finalName}</p>}
+              <p className="text-xs text-base-content/50 font-mono">
+                {finalAddress.slice(0, 6)}…{finalAddress.slice(-4)}
+              </p>
+            </div>
+            <CheckBadgeIcon className="w-4 h-4 text-primary shrink-0" />
+          </div>
+        )}
+
+        {notFound && (
+          <p className="text-xs text-error bg-error/10 rounded-lg px-3 py-2 mb-3">
+            No user found with that name.
+          </p>
+        )}
+
         <div className="flex gap-2 justify-end">
           <button className="btn btn-ghost btn-sm" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn btn-primary btn-sm" disabled={!addr.trim()} onClick={() => onDm(addr.trim())}>
+          <button className="btn btn-primary btn-sm" disabled={!canStart} onClick={() => canStart && onDm(finalAddress!)}>
             Start Chat
           </button>
         </div>
@@ -384,6 +459,21 @@ const MessagesPage = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showNewDm, setShowNewDm] = useState(false);
+  const searchParams = useSearchParams();
+  const deepLinkTo = searchParams.get("to");
+  const deepLinkHandled = useRef(false);
+
+  // Auto-open DM when navigated from another page with ?to=
+  useEffect(() => {
+    if (!deepLinkTo || !isConnected || convosLoading || deepLinkHandled.current) return;
+    deepLinkHandled.current = true;
+    const existing = conversations.find(c => c.peerAddress?.toLowerCase() === deepLinkTo.toLowerCase());
+    if (existing) {
+      setSelectedId(existing.id);
+    } else {
+      createDm(deepLinkTo).then(entry => setSelectedId(entry.id)).catch(() => {});
+    }
+  }, [deepLinkTo, isConnected, convosLoading, conversations, createDm]);
 
   const selected = conversations.find(c => c.id === selectedId) ?? null;
 
