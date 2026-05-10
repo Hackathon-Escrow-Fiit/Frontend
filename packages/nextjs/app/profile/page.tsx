@@ -12,6 +12,7 @@ import {
   ShieldCheckIcon,
   StarIcon,
 } from "@heroicons/react/24/solid";
+import { namehash } from "viem/ens";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
 import { useDecentraWorkRegistry, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 
@@ -138,6 +139,34 @@ const ProfilePage = () => {
       args: [displayAddress, skill],
     });
     return { skill, score: data != null ? Number(data) : null };
+  });
+
+  // ENS resolver text records — reads live from NexoraResolver
+  const ensNode = currentName ? namehash(`${currentName}.nexora.eth`) : undefined;
+
+  const { data: ensElo } = useScaffoldReadContract({
+    contractName: "NexoraResolver",
+    functionName: "text",
+    args: ensNode ? [ensNode, "decentrawork.elo"] : undefined,
+    query: { enabled: !!ensNode },
+  });
+  const { data: ensTier } = useScaffoldReadContract({
+    contractName: "NexoraResolver",
+    functionName: "text",
+    args: ensNode ? [ensNode, "decentrawork.tier"] : undefined,
+    query: { enabled: !!ensNode },
+  });
+  const { data: ensRole } = useScaffoldReadContract({
+    contractName: "NexoraResolver",
+    functionName: "text",
+    args: ensNode ? [ensNode, "decentrawork.role"] : undefined,
+    query: { enabled: !!ensNode },
+  });
+  const { data: ensBio } = useScaffoldReadContract({
+    contractName: "NexoraResolver",
+    functionName: "text",
+    args: ensNode ? [ensNode, "decentrawork.bio"] : undefined,
+    query: { enabled: !!ensNode },
   });
 
   const elo = rawElo != null ? Number(rawElo) : 300;
@@ -396,6 +425,45 @@ const ProfilePage = () => {
                     ))}
                   </div>
                 </div>
+
+                {/* ENS Profile */}
+                {currentName && (
+                  <div className="bg-base-100 border border-primary/30 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-400 to-violet-500 shrink-0" />
+                      <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">
+                        ENS Profile
+                      </p>
+                    </div>
+                    <p className="text-xs font-mono text-primary mb-3 truncate">
+                      {currentName}.nexora.eth
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        { key: "decentrawork.elo", value: ensElo as string | undefined },
+                        { key: "decentrawork.tier", value: ensTier as string | undefined },
+                        { key: "decentrawork.role", value: ensRole as string | undefined },
+                        { key: "decentrawork.bio", value: ensBio as string | undefined },
+                      ].map(({ key, value }) => (
+                        <div key={key}>
+                          <p className="text-[10px] text-base-content/30 font-mono">{key}</p>
+                          {value ? (
+                            <p className="text-xs text-base-content/70 truncate font-medium">
+                              {key === "decentrawork.bio" && value.length > 40
+                                ? value.slice(0, 40) + "…"
+                                : value}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-base-content/20 italic">resolving…</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-base-content/25 mt-3 leading-relaxed">
+                      Readable by any ENS-compatible app
+                    </p>
+                  </div>
+                )}
 
                 {/* Network Stats */}
                 <div className="bg-base-100 border border-base-300 rounded-xl p-4">
