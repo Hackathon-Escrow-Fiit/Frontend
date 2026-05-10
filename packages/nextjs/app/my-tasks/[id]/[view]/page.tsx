@@ -656,10 +656,13 @@ export default function TaskViewPage() {
                           <ArrowPathIcon className="w-4 h-4" />
                           Request Changes
                         </button>
-                        <button className="btn w-full gap-2 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300">
+                        <Link
+                          href={`/disputes/${id}/defense`}
+                          className="btn w-full gap-2 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300"
+                        >
                           <ExclamationTriangleIcon className="w-4 h-4" />
                           Open Dispute
-                        </button>
+                        </Link>
                       </div>
                       <p className="text-[10px] text-base-content/40 leading-relaxed mt-3 text-center">
                         Only use Dispute if direct communication fails.
@@ -1408,10 +1411,13 @@ export default function TaskViewPage() {
                     <ArrowPathIcon className="w-4 h-4" />
                     Request Changes
                   </button>
-                  <button className="btn w-full gap-2 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300">
+                  <Link
+                    href={`/disputes/${id}/defense`}
+                    className="btn w-full gap-2 bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300"
+                  >
                     <ExclamationTriangleIcon className="w-4 h-4" />
                     Open Dispute
-                  </button>
+                  </Link>
                 </div>
                 <p className="text-[10px] text-base-content/40 leading-relaxed mt-3 text-center">
                   Only use this if the work does not meet the agreed requirements and direct communication fails.

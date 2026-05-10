@@ -88,7 +88,7 @@ const JobCard = ({ job, role }: { job: OnChainJob; role: "client" | "freelancer"
 
   return (
     <Link
-      href={`/browse/${job.id.toString()}`}
+      href={role === "client" ? `/my-tasks/${job.id.toString()}/bids` : `/my-tasks/${job.id.toString()}/active`}
       className="bg-base-100 border border-base-300 rounded-2xl px-5 py-4 flex items-center gap-4 hover:border-primary/40 hover:shadow-sm transition-all group"
     >
       <div className="flex-1 min-w-0">

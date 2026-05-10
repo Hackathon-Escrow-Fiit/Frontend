@@ -62,8 +62,8 @@ export default function ResultsPage() {
       <AppLayout>
         <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
           <p className="text-base-content/40 text-sm">No results found for this task.</p>
-          <Link href={`/my-tasks/${id}/waiting`} className="btn btn-outline btn-sm mt-4">
-            Back to review
+          <Link href="/my-tasks" className="btn btn-outline btn-sm mt-4">
+            Back to My Tasks
           </Link>
         </div>
       </AppLayout>
@@ -87,7 +87,7 @@ export default function ResultsPage() {
         {/* Back */}
         <div className="flex items-center gap-3">
           <Link
-            href={`/my-tasks/${id}/waiting`}
+            href="/my-tasks"
             className="w-8 h-8 rounded-lg border border-base-300 flex items-center justify-center hover:bg-base-200 transition-colors"
           >
             <ArrowLeftIcon className="w-4 h-4 text-base-content/60" />
