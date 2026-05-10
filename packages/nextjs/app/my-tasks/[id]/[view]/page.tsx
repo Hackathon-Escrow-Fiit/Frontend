@@ -5,58 +5,47 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { blo } from "blo";
 import { formatEther } from "viem";
+import { useReadContracts } from "wagmi";
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
   ArrowPathIcon,
   ArrowUpTrayIcon,
   BoltIcon,
-  BuildingStorefrontIcon,
   CheckBadgeIcon,
   CheckCircleIcon,
   ClockIcon,
   CodeBracketIcon,
   CurrencyDollarIcon,
-  DocumentTextIcon,
   ExclamationTriangleIcon,
-  FunnelIcon,
   LockClosedIcon,
   ShieldCheckIcon,
   UserCircleIcon,
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
-import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import {
+  useDecentraWorkRegistry,
+  useDeployedContractInfo,
+  useScaffoldReadContract,
+  useScaffoldWriteContract,
+} from "~~/hooks/scaffold-eth";
+import { notification } from "~~/utils/scaffold-eth";
 
 type Role = "client" | "freelancer";
 
-const bids = [
-  {
-    id: "1",
-    name: "crypto_wizard.eth",
-    tier: "Gold Tier",
-    tierColor: "bg-yellow-100 text-yellow-700",
-    amount: "12,000 USDC",
-    days: 14,
-    bio: "I've built three production-grade DeFi dashboards in the last 6 months. Expert at optimizing subgraph queries for sub-second latency. Can start immediately and...",
-    verified: true,
-  },
-  {
-    id: "2",
-    name: "degen_stacker.eth",
-    tier: "Silver Tier",
-    tierColor: "bg-base-200 text-base-content/60",
-    amount: "14,500 USDC",
-    days: 21,
-    bio: "Full-stack engineer with deep React knowledge. Previously lead frontend at a Tier 1 DEX. My focus is on pixel-perfect UI and extreme security.",
-    verified: false,
-  },
-];
+type OnChainBid = {
+  freelancer: `0x${string}`;
+  amount: bigint;
+  proposal: string;
+  accepted: boolean;
+};
 
 export default function TaskViewPage() {
   const { id, view } = useParams<{ id: string; view: string }>();
   const router = useRouter();
-  const [role, setRole] = useState<Role>("client");
+  const { role: chainRole } = useDecentraWorkRegistry();
+  const role: Role = chainRole === "freelancer" ? "freelancer" : "client";
 
   // â”€â”€ AI report polling (waiting view only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   type CodeIssue = {
@@ -112,13 +101,9 @@ export default function TaskViewPage() {
   const [approved, setApproved] = useState(false);
   const [approveResult] = useState<ApproveResult | null>(null);
   const [, setShowResultModal] = useState(false);
+  const [acceptingIndex, setAcceptingIndex] = useState<number | null>(null);
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
-
-  useEffect(() => {
-    const stored = localStorage.getItem("dw_role");
-    if (stored === "freelancer" || stored === "client") setRole(stored as Role);
-  }, []);
 
   useEffect(() => {
     fetch(`${backendUrl}/rate-task/${id}`)
@@ -199,17 +184,19 @@ export default function TaskViewPage() {
 
   const isClient = role === "client";
 
-  const jobIdBig = /^\d+$/.test(id) ? BigInt(id) : 0n;
+  // ── Read job from chain (all views) ─────────────────────────────────────
+  const jobId = /^\d+$/.test(id) ? BigInt(id) : 0n;
   const { data: rawJob } = useScaffoldReadContract({
     contractName: "JobMarketplace",
     functionName: "getJob",
-    args: [jobIdBig],
-    query: { enabled: jobIdBig > 0n },
+    args: [jobId],
+    query: { enabled: jobId > 0n },
   });
   const job = useMemo(() => {
     if (!rawJob) return null;
     const r = rawJob as any;
     return {
+      id: r.id as bigint,
       client: r.client as `0x${string}`,
       freelancer: r.freelancer as `0x${string}`,
       title: r.title as string,
@@ -217,9 +204,12 @@ export default function TaskViewPage() {
       skills: r.skills as readonly string[],
       budget: r.budget as bigint,
       deadline: r.deadline as bigint,
+      status: Number(r.status),
+      bidCount: Number(r.bidCount),
     };
   }, [rawJob]);
 
+  // Active/review: counterparty reputation
   const counterpartyAddr = job ? (isClient ? job.freelancer : job.client) : undefined;
   const hasCounterparty = !!counterpartyAddr && counterpartyAddr !== "0x0000000000000000000000000000000000000000";
 
@@ -242,6 +232,55 @@ export default function TaskViewPage() {
             : cpElo >= 450
               ? "Rising"
               : "Entry";
+
+  // Bids view: batch-read bids + accept
+  const bidCount = job?.bidCount ?? 0;
+  const isJobOpen = job ? job.status === 0 : false;
+
+  const { data: contractInfo } = useDeployedContractInfo({ contractName: "JobMarketplace" });
+
+  const bidCalls = useMemo(() => {
+    if (!contractInfo || bidCount === 0 || view !== "bids") return [];
+    return Array.from({ length: bidCount }, (_, i) => ({
+      address: contractInfo.address as `0x${string}`,
+      abi: contractInfo.abi,
+      functionName: "getBid" as const,
+      args: [jobId, BigInt(i)] as const,
+    }));
+  }, [contractInfo, bidCount, view, jobId]);
+
+  const { data: bidResults, refetch: refetchBids } = useReadContracts({
+    contracts: bidCalls,
+    query: { enabled: bidCalls.length > 0 },
+  });
+
+  const chainBids = useMemo<(OnChainBid & { index: number })[]>(() => {
+    if (!bidResults) return [];
+    return bidResults
+      .filter(r => r.status === "success" && r.result != null)
+      .map((r, i) => ({ ...(r.result as unknown as OnChainBid), index: i }));
+  }, [bidResults]);
+
+  const { writeContractAsync: acceptBidWrite, isPending: isAccepting } = useScaffoldWriteContract({
+    contractName: "JobMarketplace",
+  });
+
+  const handleAccept = async (bidIndex: number) => {
+    setAcceptingIndex(bidIndex);
+    try {
+      await acceptBidWrite({
+        functionName: "acceptBid",
+        args: [jobId, BigInt(bidIndex)],
+      });
+      notification.success("Bid accepted — freelancer has been assigned!");
+      refetchBids();
+    } catch (e) {
+      notification.error("Failed to accept bid");
+      console.error(e);
+    } finally {
+      setAcceptingIndex(null);
+    }
+  };
 
   const clientViews = ["bids", "active", "review"];
   const freelancerViews = ["active", "waiting"];
@@ -994,114 +1033,144 @@ export default function TaskViewPage() {
         {view === "bids" && (
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 space-y-4">
+              {/* Job details from chain */}
               <div className="bg-base-100 rounded-2xl border border-base-200 p-6">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[10px] font-bold tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase">
-                        Active Project
-                      </span>
-                      <span className="text-xs text-base-content/40 font-mono">ID: #DW-8829-X</span>
-                    </div>
-                    <h1 className="text-2xl font-bold text-base-content">Next-Gen DeFi Dashboard</h1>
+                {!job ? (
+                  <div className="flex items-center gap-2 text-base-content/40 text-sm">
+                    <span className="loading loading-spinner loading-xs" />
+                    Loading job from blockchain…
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">Total Budget</p>
-                    <p className="text-2xl font-bold text-primary">15,000 USDC</p>
-                  </div>
-                </div>
-                <hr className="border-base-200 mb-4" />
-                <div className="flex items-center gap-10 mb-5">
-                  {[
-                    { label: "Duration", Icon: ClockIcon, value: "3 Weeks" },
-                    { label: "Complexity", Icon: BoltIcon, value: "High (Expert)" },
-                    { label: "Category", Icon: BuildingStorefrontIcon, value: "Fintech / Web3" },
-                  ].map(({ label, Icon, value }) => (
-                    <div key={label}>
-                      <p className="text-xs text-base-content/40 mb-1">{label}</p>
-                      <p className="text-sm font-medium text-base-content flex items-center gap-1.5">
-                        <Icon className="w-4 h-4 text-base-content/40" />
-                        {value}
-                      </p>
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[10px] font-bold tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase">
+                            {isJobOpen ? "Open for Bids" : "Closed"}
+                          </span>
+                          <span className="text-xs text-base-content/40 font-mono">Job #{job.id.toString()}</span>
+                        </div>
+                        <h1 className="text-2xl font-bold text-base-content">{job.title}</h1>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] font-bold tracking-widest text-base-content/40 uppercase">
+                          Total Budget
+                        </p>
+                        <p className="text-2xl font-bold text-primary">
+                          {Number(formatEther(job.budget)).toLocaleString(undefined, { maximumFractionDigits: 2 })} NXR
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <p className="text-xs font-bold tracking-widest text-base-content/40 uppercase mb-2">
-                  Technical Specifications
-                </p>
-                <p className="text-sm text-base-content/70 leading-relaxed mb-4">
-                  Architecture for a multi-chain yield aggregator dashboard. Required integration with Ethers.js, wagmi,
-                  and custom subgraph indexing. High-performance charting using TradingView Lightweight Charts is a
-                  must.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-base-200 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CodeBracketIcon className="w-4 h-4 text-primary" />
-                      <p className="text-xs font-bold text-base-content">Tech Stack</p>
+                    <hr className="border-base-200 mb-4" />
+                    <div className="flex items-center gap-10 mb-5">
+                      <div>
+                        <p className="text-xs text-base-content/40 mb-1">Deadline</p>
+                        <p className="text-sm font-medium text-base-content flex items-center gap-1.5">
+                          <ClockIcon className="w-4 h-4 text-base-content/40" />
+                          {new Date(Number(job.deadline) * 1000).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-base-content/40 mb-1">Complexity</p>
+                        <p className="text-sm font-medium text-base-content flex items-center gap-1.5">
+                          <BoltIcon className="w-4 h-4 text-base-content/40" />
+                          {Number(formatEther(job.budget)) < 500
+                            ? "Entry Level"
+                            : Number(formatEther(job.budget)) < 2000
+                              ? "Intermediate"
+                              : "Expert"}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-xs text-base-content/60 leading-relaxed">
-                      Next.js 14, Tailwind CSS, TypeScript, GraphQL
+                    <p className="text-xs font-bold tracking-widest text-base-content/40 uppercase mb-2">Description</p>
+                    <p className="text-sm text-base-content/70 leading-relaxed mb-4 whitespace-pre-wrap">
+                      {job.description}
                     </p>
-                  </div>
-                  <div className="rounded-xl border border-base-200 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <ShieldCheckIcon className="w-4 h-4 text-primary" />
-                      <p className="text-xs font-bold text-base-content">Security</p>
-                    </div>
-                    <p className="text-xs text-base-content/60 leading-relaxed">
-                      WalletConnect V2, SIWE, Multi-sig ready
-                    </p>
-                  </div>
-                </div>
+                    {job.skills.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {job.skills.map((s: string) => (
+                          <span
+                            key={s}
+                            className="text-xs border border-base-300 text-base-content/70 px-2.5 py-1 rounded-full"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
+              {/* Bids from chain */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-lg font-bold text-base-content">
-                    Bids Received <span className="text-base-content/40 font-normal">(12)</span>
+                    Bids Received <span className="text-base-content/40 font-normal">({bidCount})</span>
                   </h2>
-                  <div className="flex gap-2">
-                    <button className="btn btn-outline btn-sm gap-1.5">
-                      <FunnelIcon className="w-3.5 h-3.5" />
-                      Filter
-                    </button>
-                    <button className="btn btn-outline btn-sm gap-1.5">
-                      <ArrowPathIcon className="w-3.5 h-3.5" />
-                      Newest
-                    </button>
+                </div>
+
+                {bidCount === 0 ? (
+                  <div className="bg-base-100 rounded-2xl border border-base-200 p-10 text-center text-sm text-base-content/40">
+                    No bids yet. Share your job to attract freelancers.
                   </div>
-                </div>
-                <div className="space-y-3">
-                  {bids.map(bid => (
-                    <div key={bid.id} className="bg-base-100 rounded-2xl border border-base-200 p-5">
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border-2 border-primary/20">
-                            <UserGroupIcon className="w-6 h-6 text-primary/50" />
+                ) : !bidResults ? (
+                  <div className="flex items-center gap-2 text-base-content/40 text-sm py-4">
+                    <span className="loading loading-spinner loading-xs" />
+                    Loading bids…
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {chainBids.map(bid => (
+                      <div
+                        key={bid.index}
+                        className={`bg-base-100 rounded-2xl border p-5 transition-colors ${bid.accepted ? "border-success/40 bg-success/5" : "border-base-200"}`}
+                      >
+                        <div className="flex items-start justify-between gap-4 mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border-2 border-primary/20">
+                              <span className="text-sm font-bold text-primary">
+                                {bid.freelancer.slice(2, 4).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="font-semibold text-base-content text-sm font-mono">
+                                {bid.freelancer.slice(0, 6)}…{bid.freelancer.slice(-4)}
+                              </p>
+                              <p className="text-[11px] text-base-content/40">Applicant #{bid.index + 1}</p>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-base-content">{bid.name}</span>
-                            {bid.verified && <CheckBadgeIcon className="w-4 h-4 text-primary" />}
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${bid.tierColor}`}>
-                              {bid.tier}
-                            </span>
+                          <div className="text-right shrink-0">
+                            <p className="text-lg font-bold text-primary">
+                              {Number(formatEther(bid.amount)).toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
+                              NXR
+                            </p>
+                            {bid.accepted && <span className="text-[11px] text-success font-semibold">✓ Accepted</span>}
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-lg font-bold text-primary">{bid.amount}</p>
-                          <p className="text-xs text-base-content/40">in {bid.days} days</p>
-                        </div>
+                        <p className="text-sm text-base-content/65 leading-relaxed mb-4 whitespace-pre-wrap">
+                          {bid.proposal}
+                        </p>
+                        {!bid.accepted && isJobOpen && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleAccept(bid.index)}
+                              disabled={isAccepting || acceptingIndex !== null}
+                              className="btn btn-primary btn-sm"
+                            >
+                              {acceptingIndex === bid.index && <span className="loading loading-spinner loading-xs" />}
+                              {acceptingIndex === bid.index ? "Accepting…" : "Accept Bid"}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-sm text-base-content/65 leading-relaxed mb-4">{bid.bio}</p>
-                      <div className="flex items-center gap-2">
-                        <button className="btn btn-primary btn-sm">Accept Bid</button>
-                        <button className="btn btn-outline btn-sm">Message</button>
-                        <button className="btn btn-ghost btn-sm text-error ml-auto">Decline</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1116,45 +1185,43 @@ export default function TaskViewPage() {
                   <div>
                     <p className="text-xs font-bold text-primary">Funds Locked</p>
                     <p className="text-xs text-base-content/60 leading-relaxed mt-0.5">
-                      The smart contract is holding 15,000 USDC secure for this project.
+                      {job
+                        ? `${Number(formatEther(job.budget)).toLocaleString(undefined, { maximumFractionDigits: 2 })} NXR secured in escrow.`
+                        : "Loading…"}
                     </p>
                   </div>
                 </div>
                 <div className="space-y-2 text-xs mb-4">
-                  {[
-                    ["Amount Locked", "15,000.00 USDC"],
-                    ["Protocol Fee (2%)", "300.00 USDC"],
-                    ["Release Condition", "Multi-sig / Milestone"],
-                  ].map(([k, v]) => (
-                    <div key={k} className="flex justify-between">
-                      <span className="text-base-content/50">{k}</span>
-                      <span className="font-semibold text-base-content">{v}</span>
-                    </div>
-                  ))}
+                  {job && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-base-content/50">Amount Locked</span>
+                        <span className="font-semibold text-base-content">
+                          {Number(formatEther(job.budget)).toLocaleString(undefined, { maximumFractionDigits: 2 })} NXR
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-base-content/50">Release Condition</span>
+                        <span className="font-semibold text-base-content">On completion</span>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <button className="btn btn-outline btn-sm w-full gap-2">
-                  <DocumentTextIcon className="w-4 h-4" />
-                  View Contract
-                </button>
               </div>
               <div className="bg-base-100 rounded-2xl border border-base-200 p-5">
-                <h2 className="text-xs font-bold tracking-widest text-base-content/60 uppercase mb-4">Activity Log</h2>
+                <h2 className="text-xs font-bold tracking-widest text-base-content/60 uppercase mb-4">Bid Summary</h2>
                 <div className="space-y-3">
-                  {[
-                    { Icon: DocumentTextIcon, label: "Task Posted", time: "2 hours ago", color: "text-primary" },
-                    { Icon: LockClosedIcon, label: "Escrow Funded", time: "1 hour ago", color: "text-success" },
-                    { Icon: UserGroupIcon, label: "5 New Bids Received", time: "Just now", color: "text-info" },
-                  ].map(({ Icon, label, time, color }) => (
-                    <div key={label} className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-base-200 flex items-center justify-center shrink-0">
-                        <Icon className={`w-4 h-4 ${color}`} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-base-content">{label}</p>
-                        <p className="text-[10px] text-base-content/40 mt-0.5">{time}</p>
-                      </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-base-200 flex items-center justify-center shrink-0">
+                      <UserGroupIcon className="w-4 h-4 text-info" />
                     </div>
-                  ))}
+                    <div>
+                      <p className="text-xs font-medium text-base-content">
+                        {bidCount} Bid{bidCount !== 1 ? "s" : ""} Received
+                      </p>
+                      <p className="text-[10px] text-base-content/40 mt-0.5">Live from blockchain</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

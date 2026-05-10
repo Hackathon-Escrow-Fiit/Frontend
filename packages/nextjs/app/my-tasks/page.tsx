@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { formatEther } from "viem";
 import { useAccount, useReadContracts } from "wagmi";
 import { BriefcaseIcon, ClockIcon, PlusIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
-import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useDecentraWorkRegistry, useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 
 type OnChainJob = {
   id: bigint;
@@ -271,12 +271,7 @@ const Empty = ({ role }: { role: "client" | "freelancer" }) => (
 
 const MyTasksPage = () => {
   const { address } = useAccount();
-  const [role, setRole] = useState<"client" | "freelancer">("client");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("dw_role");
-    if (stored === "freelancer" || stored === "client") setRole(stored);
-  }, []);
+  const { role, isLoadingName } = useDecentraWorkRegistry();
 
   return (
     <AppLayout>
@@ -285,6 +280,8 @@ const MyTasksPage = () => {
           <div className="flex items-center justify-center h-64 text-base-content/40 text-sm">
             Connect your wallet to continue.
           </div>
+        ) : isLoadingName ? (
+          <Loader />
         ) : role === "client" ? (
           <ClientTasks address={address} />
         ) : (

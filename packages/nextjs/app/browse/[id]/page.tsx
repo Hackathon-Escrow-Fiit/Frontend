@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatEther, parseEther } from "viem";
@@ -20,7 +20,12 @@ import {
 } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as CheckCircleSolid, InformationCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { AppLayout } from "~~/components/decentrawork/AppLayout";
-import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import {
+  useDecentraWorkRegistry,
+  useDeployedContractInfo,
+  useScaffoldReadContract,
+  useScaffoldWriteContract,
+} from "~~/hooks/scaffold-eth";
 import { notification } from "~~/utils/scaffold-eth";
 
 const shortenAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -257,15 +262,10 @@ export default function BrowseTaskPage() {
   const [bidAmount, setBidAmount] = useState("");
   const [proposal, setProposal] = useState("");
   const [saved, setSaved] = useState(false);
-  const [role, setRole] = useState<"client" | "freelancer" | null>(null);
   const [acceptingIndex, setAcceptingIndex] = useState<number | null>(null);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("dw_role");
-    setRole(stored === "freelancer" ? "freelancer" : "client");
-  }, []);
-
+  const { role, isLoadingName } = useDecentraWorkRegistry();
   const isClient = role === "client";
 
   // ── Read job from chain ───────────────────────────────────────────────────
@@ -363,7 +363,7 @@ export default function BrowseTaskPage() {
 
   // ── Loading / not found ───────────────────────────────────────────────────
 
-  if (isLoading || role === null) {
+  if (isLoading || isLoadingName) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-64 gap-3 text-base-content/40">
